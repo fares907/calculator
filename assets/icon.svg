@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e2a45"/>
+      <stop offset="1" stop-color="#0f1726"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e8c98e"/>
+      <stop offset="1" stop-color="#a8873e"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- صندوق مخزن -->
+  <path d="M256 96 424 176v56L256 152 88 232v-56z" fill="url(#gold)"/>
+  <rect x="120" y="248" width="272" height="168" rx="16" fill="none" stroke="url(#gold)" stroke-width="22"/>
+  <path d="M120 316h272" stroke="url(#gold)" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="256" cy="366" r="24" fill="url(#gold)"/>
+</svg>

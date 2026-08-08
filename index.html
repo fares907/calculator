@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1726">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="مواد البناء">
+<meta name="description" content="نظام مواد البناء — حاسبة الأسعار ومخزن الحديد والأسمنت">
+<title>نظام مواد البناء</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon.svg">
+
+<style>
+  /* الصفحة دي بس: توسيط رأسي مع احترام ارتفاع شاشة الموبايل */
+  .home{
+    /* بنطرح حشوة الـ body (فوق + تحت) عشان الصفحة تدخل بالظبط من غير تمرير */
+    min-height:calc(100dvh - var(--sp-3) - var(--sp-6) - var(--safe-t) - var(--safe-b));
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;gap:var(--sp-4);
+  }
+  .home .logo{font-size:clamp(2.4rem,11vw,3.4rem);line-height:1;}
+  .home .sub{color:var(--muted);font-size:.9rem;margin-bottom:var(--sp-5);}
+
+  .nav-grid{display:grid;grid-template-columns:1fr;gap:var(--sp-4);width:100%;max-width:640px;}
+  @media(min-width:600px){.nav-grid{grid-template-columns:1fr 1fr;}}
+
+  .nav-card{
+    display:flex;flex-direction:column;align-items:center;gap:var(--sp-3);
+    background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r-lg);padding:var(--sp-6) var(--sp-5);
+    position:relative;overflow:hidden;
+    transition:transform .2s,border-color .2s,box-shadow .2s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .nav-card::after{content:'';position:absolute;inset-inline:0;bottom:0;height:3px;}
+  .nav-card.calc::after{background:linear-gradient(90deg,var(--steel-dark),var(--steel));}
+  .nav-card.store::after{background:linear-gradient(90deg,var(--cement-dark),var(--cement-light));}
+  .nav-card:active{transform:scale(.985);}
+  @media(hover:hover){
+    .nav-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-3);}
+    .nav-card.calc:hover{border-color:var(--steel-dark);}
+    .nav-card.store:hover{border-color:var(--cement);}
+  }
+  .nc-icon{font-size:2.6rem;line-height:1;}
+  .nc-title{font-size:1.2rem;font-weight:900;}
+  .nc-desc{font-size:.82rem;color:var(--muted);line-height:1.7;}
+  .home .footer{color:var(--muted-2);font-size:.75rem;margin-top:var(--sp-6);}
+</style>
+</head>
+<body>
+
+<main class="container home">
+  <div class="logo">🏗️</div>
+  <div class="page-head" style="padding:0">
+    <h1>نظام مواد البناء</h1>
+  </div>
+  <p class="sub">حاسبة الأسعار · مخزن الحديد والأسمنت</p>
+
+  <nav class="nav-grid">
+    <a href="calculator.html" class="nav-card calc">
+      <span class="nc-icon">🧮</span>
+      <span class="nc-title">الحاسبة</span>
+      <span class="nc-desc">احسب تكلفة الحديد والأسمنت بسعر السوق — بالطن والكيلو والشكارة</span>
+      <span class="btn btn-primary" style="background:linear-gradient(135deg,var(--steel-dark),var(--steel));color:#fff">
+        افتح الحاسبة ←</span>
+    </a>
+
+    <a href="warehouse.html" class="nav-card store">
+      <span class="nc-icon">📦</span>
+      <span class="nc-title">المخزن</span>
+      <span class="nc-desc">صرف واستلام بضاعة — تتبع الرصيد وسجل كل الحركات مع بحث وتصدير</span>
+      <span class="btn btn-primary">افتح المخزن ←</span>
+    </a>
+  </nav>
+
+  <p class="footer">حديد · أسمنت · مواد بناء</p>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "نظام مواد البناء",
+  "short_name": "مواد البناء",
+  "description": "حاسبة أسعار ومخزن الحديد والأسمنت",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1726",
+  "theme_color": "#0f1726",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "المخزن", "url": "warehouse.html" },
+    { "name": "الحاسبة", "url": "calculator.html" }
+  ]
+}
