@@ -235,6 +235,87 @@
       <style>${css}</style></head><body>${html}</body></html>`;
   }
 
+
+  /* ======================================================================
+     إذن صرف / استلام — ورقة رسمية للحركة الواحدة
+     ====================================================================== */
+  const DOC_CSS = `
+    @page{size:A4;margin:14mm 12mm}
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-family:"Readex Pro",Cairo,"Segoe UI",Tahoma,sans-serif;direction:rtl;color:#1f1a14;background:#fff;font-size:12px;line-height:1.6}
+    .num{direction:ltr;display:inline-block;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+    td.num{display:table-cell;text-align:right}
+    .hd{display:flex;align-items:center;gap:14px;padding-bottom:14px;border-bottom:3px solid #b0653a;margin-bottom:18px}
+    .hd img{width:64px;height:64px}
+    .hd .co b{display:block;font-size:22px;font-weight:700;color:#221d16}
+    .hd .co span{font-size:11px;color:#7d7262}
+    .hd .doc{margin-inline-start:auto;text-align:left}
+    .hd .doc b{display:block;font-size:20px;font-weight:700}
+    .hd .doc span{font-size:11px;color:#7d7262}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .f{border:1px solid #e6dfd3;border-radius:10px;padding:10px 12px;background:#fbf9f4}
+    .f .l{font-size:10px;color:#7d7262;font-weight:600}
+    .f .v{font-size:15px;font-weight:700;margin-top:2px}
+    .big{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;background:#221d16;color:#f5f2ea;border:0}
+    .big .l{color:#c9b9a2}.big .v{font-size:24px;color:#f1c27d}
+    table{width:100%;border-collapse:collapse}
+    th{background:#221d16;color:#f1c27d;font-size:10px;font-weight:600;padding:7px 8px;text-align:right}
+    td{padding:7px 8px;border-bottom:1px solid #ece6db;font-size:11px}
+    tbody tr:nth-child(even){background:#faf7f1}
+    .sig{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:56px}
+    .sig div{border-top:1.5px solid #221d16;padding-top:6px;text-align:center;font-size:11px;color:#5c5245}
+    .ft{margin-top:28px;padding-top:8px;border-top:1px solid #ece6db;font-size:9.5px;color:#9a8f7e;display:flex;justify-content:space-between}
+    .stamp{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700}
+    .s-in{background:#dcfce7;color:#15803d}.s-out{background:#fee2e2;color:#b91c1c}.s-pay{background:#fdf0d5;color:#8a5a2b}`;
+  const docHead = (title, logo) => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;600;700&display=swap"><style>${DOC_CSS}</style></head><body>`;
+  const brandHd = (logo, docTitle, sub) => `<div class="hd"><img src="${esc(logo)}" alt=""><div class="co"><b>الإخلاص</b><span>لتجارة مواد البناء — كفر شكر، القليوبية</span></div>
+    <div class="doc"><b>${esc(docTitle)}</b><span>${sub}</span></div></div>`;
+
+  function buildVoucherHtml(o) {
+    const m = o.m, out = m.type === 'out';
+    const title = out ? 'إذن صرف بضاعة' : 'إذن استلام بضاعة';
+    const sub = m.mat === 'steel' ? App.fmt(m.qtyTon * 1000) + ' كجم' : App.fmt(m.qtyTon * 20) + ' شكارة';
+    return docHead(title) + brandHd(o.logo, title, `رقم <span class="num">${esc(m.ref || m.id.slice(0, 8).toUpperCase())}</span> · <span class="num">${App.fmtDateTime(m.ts)}</span>`) +
+      `<div class="grid">
+        <div class="f"><div class="l">${out ? 'صُرف إلى' : 'استُلم من'}</div><div class="v">${esc(m.party || '—')}</div></div>
+        <div class="f"><div class="l">النوع</div><div class="v"><span class="stamp ${out ? 's-out' : 's-in'}">${out ? 'صرف' : 'استلام'}</span> ${o.paid ? '<span class="stamp s-pay">كاش</span>' : (m.party ? '<span class="stamp s-pay">آجل</span>' : '')}</div></div>
+      </div>
+      <table><thead><tr><th>الصنف</th><th>الكمية</th><th>ما يعادل</th><th>سعر الطن</th><th>القيمة</th></tr></thead><tbody>
+        <tr><td><b>${esc(o.itemName)}</b></td><td><b class="num">${App.fmtD(m.qtyTon)}</b> طن</td><td class="num">${sub}</td>
+        <td><span class="num">${App.fmt(m.unitPrice)}</span> ج</td><td><b class="num">${App.fmt(m.value)}</b> ج</td></tr></tbody></table>
+      <div class="grid" style="margin-top:14px"><div class="f big"><div class="l">الإجمالي</div><div class="v"><span class="num">${App.fmt(m.value)}</span> جنيه</div></div>
+        ${m.note ? `<div class="f" style="grid-column:1/-1"><div class="l">ملاحظات</div><div class="v" style="font-size:13px;font-weight:600">${esc(m.note)}</div></div>` : ''}</div>
+      <div class="sig"><div>أمين المخزن${m.by ? '<br><b>' + esc(m.by) + '</b>' : ''}</div><div>${out ? 'المستلم' : 'المورد / السائق'}</div><div>الاعتماد</div></div>
+      <div class="ft"><span>مخزن الإخلاص — مستند صادر من النظام</span><span class="num">${App.fmtDateTime(Date.now())}</span></div></body></html>`;
+  }
+
+  /* ======================================================================
+     كشف حساب جهة — مدين / دائن / رصيد متحرك
+     ====================================================================== */
+  function buildStatementHtml(o) {
+    const st = o.st, b = st.balance;
+    const balTxt = Math.abs(b) < 0.5 ? 'الحساب خالص' : b > 0 ? `مستحق على ${st.party}` : `مستحق لـ ${st.party}`;
+    let rows = '';
+    for (const r of st.rows) {
+      const desc = r.kind === 'move'
+        ? `${r.m.type === 'out' ? 'صرف' : 'استلام'} ${App.fmtD(r.m.qtyTon)} طن ${esc(o.itemName(r.m.item))}${r.m.ref ? ' — إذن ' + esc(r.m.ref) : ''}`
+        : `${r.p.dir === 'in' ? 'دفعة مستلمة' : 'دفعة مسددة'}${r.p.note ? ' — ' + esc(r.p.note) : ''}`;
+      rows += `<tr><td class="num">${App.fmtDate(r.ts)}</td><td>${desc}</td><td class="num">${r.debit ? App.fmt(r.debit) : ''}</td>
+        <td class="num">${r.credit ? App.fmt(r.credit) : ''}</td><td class="num"><b>${App.fmt(r.balance)}</b></td></tr>`;
+    }
+    return docHead('كشف حساب — ' + st.party) + brandHd(o.logo, 'كشف حساب', `${esc(st.party)} · حتى <span class="num">${App.fmtDate(Date.now())}</span>`) +
+      `<div class="grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="f"><div class="l">إجمالي المدين</div><div class="v"><span class="num">${App.fmt(st.debit)}</span> ج</div></div>
+        <div class="f"><div class="l">إجمالي الدائن</div><div class="v"><span class="num">${App.fmt(st.credit)}</span> ج</div></div>
+        <div class="f big" style="grid-column:auto"><div class="l">${esc(balTxt)}</div><div class="v"><span class="num">${App.fmt(Math.abs(b))}</span> ج</div></div>
+      </div>
+      <table><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>${rows || '<tr><td colspan="5">مفيش تعاملات</td></tr>'}</tbody></table>
+      <div class="sig" style="grid-template-columns:1fr 1fr"><div>توقيع الشركة</div><div>توقيع العميل / المورد</div></div>
+      <div class="ft"><span>الإخلاص لتجارة مواد البناء — كشف حساب صادر من النظام</span><span class="num">${App.fmtDateTime(Date.now())}</span></div></body></html>`;
+  }
+
   /* الطباعة عن طريق إطار مخفي (بيتفادى حظر النوافذ المنبثقة) */
   function printHtml(html) {
     document.getElementById('printFrame')?.remove();
@@ -254,5 +335,5 @@
     setTimeout(go, 1800);
   }
 
-  global.Report = { PERIODS, rangeFor, barChart, legendHtml, wireTooltip, sparkline, summaryTiles, buildReportHtml, printHtml };
+  global.Report = { PERIODS, rangeFor, barChart, legendHtml, wireTooltip, sparkline, summaryTiles, buildReportHtml, buildVoucherHtml, buildStatementHtml, printHtml };
 })(window);

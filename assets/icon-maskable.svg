@@ -1,16 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="الإخلاص">
   <defs>
-    <linearGradient id="gold2" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#e8c98e"/>
-      <stop offset="1" stop-color="#a8873e"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A2B1F"/><stop offset="1" stop-color="#140F0B"/>
     </linearGradient>
+    <linearGradient id="cu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2BF8C"/><stop offset=".55" stop-color="#C9773F"/><stop offset="1" stop-color="#8E4E2A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".3" cy=".15" r=".9">
+      <stop offset="0" stop-color="#E7A77B" stop-opacity=".35"/><stop offset="1" stop-color="#E7A77B" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <!-- خلفية كاملة: المساحة الآمنة للأيقونة القابلة للقص هي الـ 80% الوسطانية -->
-  <rect width="512" height="512" fill="#0f1726"/>
-  <g transform="translate(256 256) scale(0.62) translate(-256 -256)">
-    <path d="M256 96 424 176v56L256 152 88 232v-56z" fill="url(#gold2)"/>
-    <rect x="120" y="248" width="272" height="168" rx="16" fill="none" stroke="url(#gold2)" stroke-width="22"/>
-    <path d="M120 316h272" stroke="url(#gold2)" stroke-width="18" stroke-linecap="round"/>
-    <circle cx="256" cy="366" r="24" fill="url(#gold2)"/>
+  <rect width="120" height="120" fill="url(#bg)"/>
+  <rect width="120" height="120" fill="url(#glow)"/>
+  <!-- السقف -->
+  <g transform="translate(60 60) scale(.8) translate(-60 -60)"><path d="M22 52 60 25l38 27" fill="none" stroke="url(#cu)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- أسياخ التسليح -->
+  <g fill="url(#cu)">
+    <rect x="35" y="54" width="9" height="44" rx="4.5"/>
+    <rect x="55.5" y="40" width="9" height="58" rx="4.5"/>
+    <rect x="76" y="54" width="9" height="44" rx="4.5"/>
   </g>
-</svg>
+  <!-- تضليع الحديد -->
+  <g stroke="#2A1E15" stroke-opacity=".55" stroke-width="1.6" stroke-linecap="round">
+    <path d="M36 62l7-3M36 70l7-3M36 78l7-3M36 86l7-3M36 94l7-3"/>
+    <path d="M56.5 48l7-3M56.5 56l7-3M56.5 64l7-3M56.5 72l7-3M56.5 80l7-3M56.5 88l7-3M56.5 96l7-3"/>
+    <path d="M77 62l7-3M77 70l7-3M77 78l7-3M77 86l7-3M77 94l7-3"/>
+  </g>
+  <!-- الكانات -->
+  <g fill="none" stroke="#F5F2EA" stroke-opacity=".8" stroke-width="2.4" stroke-linecap="round">
+    <path d="M30 70h60M30 86h60"/>
+  </g>
+  <path d="M24 101h72" stroke="#F5F2EA" stroke-opacity=".35" stroke-width="2.4" stroke-linecap="round"/>
+</g></svg>

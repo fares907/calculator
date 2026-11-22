@@ -12,7 +12,8 @@
   'use strict';
 
   const DB_NAME = 'binaa_warehouse';
-  const DB_VER  = 2;
+  const DB_VER  = 3;
+  const S_PAY   = 'payments';
   const S_MOVES = 'moves';
   const S_META  = 'meta';
 
@@ -78,6 +79,7 @@
       note: str(m.note, 300),
       party: str(m.party, 120).trim(),
       ref: str(m.ref, 60),
+      by: str(m.by, 40),
       ts,
       updatedAt: num(m.updatedAt) || Date.now(),
       del: m.del ? 1 : 0,
@@ -99,6 +101,7 @@
       } catch (e) { this.data = { moves: [], meta: {} }; }
       this.data.moves ||= [];
       this.data.meta ||= {};
+      this.data.pays ||= [];
       return this.data;
     },
     save() {
@@ -135,6 +138,12 @@
         }
         if (!st.indexNames.contains('item_ts')) st.createIndex('item_ts', ['item', 'ts']);
         if (!d.objectStoreNames.contains(S_META)) d.createObjectStore(S_META, { keyPath: 'k' });
+        if (!d.objectStoreNames.contains(S_PAY)) {
+          const ps = d.createObjectStore(S_PAY, { keyPath: 'id' });
+          ps.createIndex('ts', 'ts');
+          ps.createIndex('dirty', 'dirty');
+          ps.createIndex('party_ts', ['party', 'ts']);
+        }
 
         /* ترقية v1 → v2: كل حركة قديمة تاخد صنف "عام" + نحسب أرصدة الأصناف */
         if (ev.oldVersion > 0 && ev.oldVersion < 2) {
@@ -223,6 +232,7 @@
       if (patch && k in patch && Number.isFinite(Number(patch[k]))) cur[k] = Math.max(0, Number(patch[k]));
     }
     await metaSet('settings', cur);
+    if (patch && ('steelPriceTon' in patch || 'cementBagPrice' in patch)) await metaSet('prices_at', (patch && patch._stamp) || Date.now());
     return cur;
   }
 
@@ -245,9 +255,10 @@
     const raw = await metaGet('items', null);
     return cleanItems(raw || DEFAULT_ITEMS);
   }
-  async function setItems(list) {
+  async function setItems(list, stamp) {
     const clean = cleanItems(list);
     await metaSet('items', clean);
+    await metaSet('items_at', stamp || Date.now());
     return clean;
   }
 
@@ -587,9 +598,10 @@
 
   async function wipe() {
     await open();
-    if (useFallback) { FB.data = { moves: [], meta: { settings: FB.load().meta.settings, items: FB.load().meta.items } }; FB.save(); return; }
-    const t = tx([S_MOVES, S_META], 'readwrite');
+    if (useFallback) { FB.data = { moves: [], pays: [], meta: { settings: FB.load().meta.settings, items: FB.load().meta.items } }; FB.save(); return; }
+    const t = tx([S_MOVES, S_META, S_PAY], 'readwrite');
     t.objectStore(S_MOVES).clear();
+    t.objectStore(S_PAY).clear();
     t.objectStore(S_META).delete('balance');
     t.objectStore(S_META).delete('itemBal');
     return done(t);
@@ -634,6 +646,170 @@
     return n;
   }
 
+  /* ======================================================================
+     الدفعات — حسابات العملاء والموردين
+     dir: 'in' = استلمنا فلوس (من عميل) · 'out' = دفعنا فلوس (لمورد)
+     الدفعة اللي اتعملت أوتوماتيك مع حركة "كاش" مربوطة بيها: ref = 'M:<id الحركة>'
+     ====================================================================== */
+  function normalizePay(p, opts) {
+    if (!p || typeof p !== 'object') return null;
+    const id = str(p.id, 64);
+    if (!ID_RE.test(id)) return null;
+    if (p.dir !== 'in' && p.dir !== 'out') return null;
+    const party = str(p.party, 120).trim();
+    if (!party) return null;
+    const amount = App.round3(Math.abs(num(p.amount)));
+    if (amount > 1e12) return null;
+    return {
+      id, party, dir: p.dir, amount,
+      method: str(p.method, 20), note: str(p.note, 300), ref: str(p.ref, 60), by: str(p.by, 40),
+      ts: num(p.ts) || Date.now(), updatedAt: num(p.updatedAt) || Date.now(),
+      del: p.del ? 1 : 0,
+      dirty: opts && 'dirty' in opts ? opts.dirty : (p.dirty ? 1 : 0)
+    };
+  }
+  async function putPay(p) {
+    await open();
+    if (useFallback) {
+      const d = FB.load(); const i = d.pays.findIndex((x) => x.id === p.id);
+      if (i > -1) d.pays[i] = p; else d.pays.push(p);
+      if (!FB.save()) throw new Error('QUOTA');
+      return p;
+    }
+    const t = tx([S_PAY], 'readwrite'); t.objectStore(S_PAY).put(p); await done(t); return p;
+  }
+  async function getPay(id) {
+    await open();
+    if (useFallback) return FB.load().pays.find((x) => x.id === id) || null;
+    return (await wrap(tx([S_PAY], 'readonly').objectStore(S_PAY).get(id))) || null;
+  }
+  async function addPayment(p) {
+    const now = Date.now();
+    const pay = normalizePay({ ...p, id: p.id || App.uid(), ts: p.ts || now, updatedAt: now }, { dirty: 1 });
+    if (!pay || pay.amount <= 0) throw new Error('بيانات الدفعة مش صحيحة');
+    return putPay(pay);
+  }
+  async function updatePayment(id, patch) {
+    const old = await getPay(id);
+    if (!old) return null;
+    const p = normalizePay({ ...old, ...patch, id, updatedAt: Date.now() }, { dirty: 1 });
+    return p ? putPay(p) : null;
+  }
+  async function eachPayment(cb, opts = {}) {
+    await open();
+    const ok = (p) => !p.del && (!opts.party || p.party === opts.party) && (!opts.from || p.ts >= opts.from) && (!opts.to || p.ts <= opts.to);
+    if (useFallback) { [...FB.load().pays].sort((a, b) => b.ts - a.ts).forEach((p) => { if (ok(p)) cb(p); }); return; }
+    const st = tx([S_PAY], 'readonly').objectStore(S_PAY);
+    if (opts.party) {
+      await scan(st.index('party_ts'), IDBKeyRange.bound([opts.party, 0], [opts.party, Number.MAX_SAFE_INTEGER]), 'prev', (p) => { if (ok(p)) cb(p); });
+    } else {
+      await scan(st.index('ts'), null, 'prev', (p) => { if (ok(p)) cb(p); });
+    }
+  }
+  /* الدفعة المربوطة بحركة (كاش) */
+  async function linkedPayment(moveId) {
+    let found = null;
+    await open();
+    const ref = 'M:' + moveId;
+    if (useFallback) return FB.load().pays.find((p) => p.ref === ref) || null;
+    await scan(tx([S_PAY], 'readonly').objectStore(S_PAY), null, 'next', (p) => { if (p.ref === ref) { found = p; return false; } });
+    return found;
+  }
+  /* بنظبط الدفعة المربوطة بعد إضافة/تعديل/إلغاء حركة */
+  async function syncLinkedPayment(move, cash) {
+    if (!move) return;
+    const cur = await linkedPayment(move.id);
+    const want = cash !== undefined ? cash : !!(cur && !cur.del);
+    if (!move.party || move.del || !want || !(move.value > 0)) {
+      if (cur && !cur.del) await updatePayment(cur.id, { del: 1 });
+      return;
+    }
+    const data = { party: move.party, dir: move.type === 'out' ? 'in' : 'out', amount: move.value, method: 'cash', ts: move.ts, by: move.by, del: 0,
+                   note: (move.type === 'out' ? 'تحصيل كاش مع إذن صرف' : 'سداد كاش مع إذن استلام') };
+    if (cur) await updatePayment(cur.id, data);
+    else await addPayment({ ...data, ref: 'M:' + move.id });
+  }
+  async function getDirtyPay(limit = 200) {
+    await open();
+    if (useFallback) return FB.load().pays.filter((p) => p.dirty === 1).slice(0, limit);
+    const out = [];
+    await scan(tx([S_PAY], 'readonly').objectStore(S_PAY).index('dirty'), IDBKeyRange.only(1), 'next', (v) => { out.push(v); return out.length < limit; });
+    return out;
+  }
+  async function markCleanPay(list) {
+    if (!list || !list.length) return;
+    const want = new Map(list.map((p) => [p.id, p.updatedAt]));
+    await open();
+    if (useFallback) { FB.load().pays.forEach((p) => { if (want.get(p.id) === p.updatedAt) p.dirty = 0; }); FB.save(); return; }
+    const t = tx([S_PAY], 'readwrite'); const st = t.objectStore(S_PAY);
+    for (const [id, upd] of want) st.get(id).onsuccess = (ev) => { const p = ev.target.result; if (p && p.updatedAt === upd) { p.dirty = 0; st.put(p); } };
+    return done(t);
+  }
+  async function bulkPutPay(list, markClean) {
+    const clean = (list || []).map((p) => normalizePay(p, markClean ? { dirty: 0 } : undefined)).filter(Boolean);
+    if (!clean.length) return 0;
+    await open();
+    if (useFallback) {
+      const d = FB.load(); const byId = new Map(d.pays.map((p, i) => [p.id, i]));
+      for (const p of clean) { const i = byId.get(p.id); if (i === undefined) d.pays.push(p); else if (d.pays[i].updatedAt <= p.updatedAt) d.pays[i] = p; }
+      FB.save(); return clean.length;
+    }
+    const t = tx([S_PAY], 'readwrite'); const st = t.objectStore(S_PAY);
+    for (const p of clean) st.get(p.id).onsuccess = (ev) => { const cur = ev.target.result; if (!cur || cur.updatedAt <= p.updatedAt) st.put(p); };
+    await done(t);
+    return clean.length;
+  }
+
+  /* ======================================================================
+     كشف حساب جهة: الحركات + الدفعات بالترتيب مع رصيد متحرك
+     الرصيد الموجب = الجهة عليها فلوس لينا · السالب = إحنا علينا فلوس للجهة
+     ====================================================================== */
+  async function statement(party) {
+    const rows = [];
+    await eachMove((m) => rows.push({ kind: 'move', ts: m.ts, m, debit: m.type === 'out' ? m.value : 0, credit: m.type === 'in' ? m.value : 0 }), { party });
+    await eachPayment((p) => rows.push({ kind: 'pay', ts: p.ts, p, debit: p.dir === 'out' ? p.amount : 0, credit: p.dir === 'in' ? p.amount : 0 }), { party });
+    rows.sort((a, b) => a.ts - b.ts);
+    let bal = 0, debit = 0, credit = 0;
+    for (const r of rows) { bal += r.debit - r.credit; debit += r.debit; credit += r.credit; r.balance = App.round3(bal); }
+    return { party, rows, debit: App.round3(debit), credit: App.round3(credit), balance: App.round3(bal) };
+  }
+
+  /* ---------- أرصدة كل الجهات (للدفتر) ---------- */
+  async function partyAccounts() {
+    const list = await parties();
+    const map = new Map(list.map((p) => [p.name, { ...p, payIn: 0, payOut: 0 }]));
+    await eachPayment((p) => {
+      let a = map.get(p.party);
+      if (!a) { a = { name: p.party, inTon: 0, outTon: 0, inVal: 0, outVal: 0, count: 0, last: p.ts, payIn: 0, payOut: 0 }; map.set(p.party, a); }
+      if (p.dir === 'in') a.payIn += p.amount; else a.payOut += p.amount;
+      if (p.ts > a.last) a.last = p.ts;
+    });
+    return [...map.values()].map((a) => ({ ...a, balance: App.round3((a.outVal - a.payIn) - (a.inVal - a.payOut)) })).sort((a, b) => b.last - a.last);
+  }
+
+  /* ======================================================================
+     تحليلات الأصناف: متوسط تكلفة الشراء + معدل الصرف اليومي (آخر 30 يوم)
+     ====================================================================== */
+  async function itemInsights() {
+    const since = Date.now() - 30 * 864e5;
+    const acc = {};
+    await eachMove((m) => {
+      const a = (acc[m.item] ||= { inTon: 0, inVal: 0, out30: 0, outTon: 0, outVal: 0 });
+      if (m.type === 'in') { a.inTon += m.qtyTon; a.inVal += m.value; }
+      else { a.outTon += m.qtyTon; a.outVal += m.value; if (m.ts >= since) a.out30 += m.qtyTon; }
+    });
+    const out = {};
+    for (const [id, a] of Object.entries(acc)) {
+      const avgCost = a.inTon > 0 ? a.inVal / a.inTon : 0;
+      out[id] = {
+        avgCost: App.round3(avgCost),
+        dailyOut: App.round3(a.out30 / 30),
+        profit: avgCost > 0 ? App.round3(a.outVal - a.outTon * avgCost) : null
+      };
+    }
+    return out;
+  }
+
   async function info() {
     await open();
     return { engine: useFallback ? 'localStorage (احتياطي)' : 'IndexedDB', fallback: useFallback };
@@ -647,6 +823,9 @@
     addMove, updateMove, removeMove, restoreMove, getMove,
     query, series, eachMove, parties, count,
     bulkPut, getDirty, markClean, normalizeMove,
+    addPayment, updatePayment, getPay, eachPayment, syncLinkedPayment, linkedPayment,
+    getDirtyPay, markCleanPay, bulkPutPay, normalizePay,
+    statement, partyAccounts, itemInsights,
     metaGet, metaSet, wipe, seed
   };
 })(window);

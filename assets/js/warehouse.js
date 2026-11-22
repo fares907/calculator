@@ -25,6 +25,11 @@
     dashPeriod: 'm6',
     parties: null,
     priceTouched: false,
+    pay: 'cash',
+    insights: {},
+    accounts: null,
+    accParty: null,
+    editingPay: null,
     editing: null,
     editingItem: null
   };
@@ -41,6 +46,9 @@
     seg.style.setProperty('--i', btns.indexOf(btn));
   }
   function errMsg(e) { return (e && e.message) || ''; }
+  const USER_KEY = 'binaa_user';
+  function userName() { try { return localStorage.getItem(USER_KEY) || ''; } catch (e) { return ''; } }
+  const absUrl = (p) => new URL(p, location.href).href;
 
   /* ======================================================================
      1. الأسعار
@@ -129,6 +137,7 @@
       Report.wireTooltip(host);
       $('#dashLegend').innerHTML = Report.legendHtml();
       renderRecent(recent.rows);
+      renderInsights();
       App.countTo($('#k30'), last30.totals.count);
       $('#spark30').innerHTML = Report.sparkline(last30.buckets.map((b) => b.count), getComputedStyle(document.documentElement).getPropertyValue('--in').trim());
     } catch (e) {
@@ -175,7 +184,7 @@
     if (view === 'dash') { renderBalance(); loadDash(); }
     else if (view === 'move') { renderPreview(); setTimeout(() => { if (matchMedia('(pointer:fine)').matches) $('#qtyTon').focus(); }, 350); }
     else if (view === 'log') loadLog();
-    else if (view === 'items') renderItems();
+    else if (view === 'items') { renderItems(); Store.itemInsights().then((x) => { state.insights = x; renderItems(); }); }
     else if (view === 'reports') loadReports();
   }
 
@@ -288,8 +297,9 @@
       const res = await Store.addMove({
         type: state.type, mat: state.mat, item, qtyTon: qty, unitPrice: N($('#priceInp').value),
         note: $('#noteInp').value.trim(), party: $('#partyInp').value.trim(), ref: $('#refInp').value.trim(),
-        ts: Number.isFinite(ts) ? ts : Date.now()
+        ts: Number.isFinite(ts) ? ts : Date.now(), by: userName()
       });
+      await Store.syncLinkedPayment(res.move, state.pay === 'cash');
       applyResult(res);
       ['#qtyTon', '#qtySub', '#noteInp', '#refInp', '#tsInp'].forEach((s) => { $(s).value = ''; });
       fillItemSelect($('#itemSelect'), state.mat, item);
@@ -297,8 +307,8 @@
       const id = res.move.id;
       App.toast(`${state.type === 'out' ? 'تم الصرف' : 'تم الاستلام'} ✓ ${App.fmtD(qty)} طن ${itemName(item)}`, 'ok', 6000, {
         label: 'تراجع',
-        run: async () => { const r = await Store.removeMove(id); if (r) { applyResult(r); App.toast('اتلغت الحركة', 'info'); pushSoon(); } }
-      });
+        run: async () => { const r = await Store.removeMove(id); if (r) { await Store.syncLinkedPayment(r.move); applyResult(r); App.toast('اتلغت الحركة', 'info'); pushSoon(); } }
+      }, { label: 'طباعة إذن', run: () => printVoucher(id) });
       pushSoon();
     } catch (err) {
       App.toast(err && err.message === 'QUOTA' ? 'مساحة التخزين امتلأت — خُد نسخة احتياطية' : 'مشكلة في الحفظ: ' + errMsg(err), 'err', 5000);
@@ -309,6 +319,7 @@
 
   function applyResult(res) {
     if (!res) return;
+    state.accounts = null;
     state.balance = res.balance;
     state.itemBal = res.itemBal;
     state.parties = null;
@@ -357,9 +368,10 @@
         <td data-label="الجهة">${m.party ? `<button class="t-brand" style="text-align:start" data-party="${esc(m.party)}" type="button">${esc(m.party)}</button>` : '<span class="t-faint">—</span>'}</td>
         <td data-label="الإذن">${m.ref ? '<span class="num">' + esc(m.ref) + '</span>' : '<span class="t-faint">—</span>'}</td>
         <td data-label="ملاحظة" class="c-wide">${m.note ? esc(m.note) : '<span class="t-faint">—</span>'}</td>
-        <td data-label="التاريخ"><span class="num" style="font-size:.8rem">${App.fmtDate(m.ts)}</span><span class="t-sub">${esc(App.fmtTime(m.ts))}</span></td>
+        <td data-label="التاريخ"><span class="num" style="font-size:.8rem">${App.fmtDate(m.ts)}</span><span class="t-sub">${esc(App.fmtTime(m.ts))}${m.by ? ' · ' + esc(m.by) : ''}</span></td>
         <td class="c-act">
           <button class="btn btn-ghost btn-sm" data-edit="${esc(m.id)}" type="button">${icon('edit', 'i-sm')}تعديل</button>
+          <button class="btn btn-ghost btn-sm btn-icon" data-voucher="${esc(m.id)}" type="button" aria-label="طباعة إذن" title="طباعة إذن">${icon('printer', 'i-sm')}</button>
           <button class="btn btn-ghost btn-sm btn-icon" data-undo="${esc(m.id)}" type="button" aria-label="إلغاء الحركة" title="إلغاء الحركة">${icon('trash', 'i-sm')}</button>
         </td></tr>`;
     });
@@ -426,7 +438,9 @@
       const ed = e.target.closest('[data-edit]');
       if (ed) return openEdit(ed.dataset.edit);
       const pb = e.target.closest('[data-party]');
-      if (pb) return showLogFor({ party: pb.dataset.party });
+      if (pb) return openAccount(pb.dataset.party);
+      const vb = e.target.closest('[data-voucher]');
+      if (vb) return printVoucher(vb.dataset.voucher);
       const un = e.target.closest('[data-undo]');
       if (!un) return;
       const ok = await App.confirm('الحركة هتتلغي والرصيد هيرجع زي ما كان. تقدر ترجّعها من زرار "تراجع" اللي هيظهر.', { title: 'إلغاء الحركة', okText: 'أيوه، الغيها' });
@@ -434,8 +448,10 @@
       const id = un.dataset.undo;
       const r = await Store.removeMove(id);
       if (!r) return App.toast('الحركة مش موجودة', 'err');
+      const hadCash = !!(await Store.linkedPayment(id));
+      await Store.syncLinkedPayment(r.move);
       applyResult(r);
-      App.toast('اتلغت الحركة', 'ok', 6000, { label: 'تراجع', run: async () => { const x = await Store.restoreMove(id); if (x) { applyResult(x); App.toast('رجعت الحركة ✓', 'ok'); pushSoon(); } } });
+      App.toast('اتلغت الحركة', 'ok', 6000, { label: 'تراجع', run: async () => { const x = await Store.restoreMove(id); if (x) { await Store.syncLinkedPayment(x.move, hadCash); applyResult(x); App.toast('رجعت الحركة ✓', 'ok'); pushSoon(); } } });
       pushSoon();
     });
 
@@ -448,7 +464,7 @@
     $('#btnMoreFilters').addEventListener('click', () => { $('#moreFilters').hidden = !$('#moreFilters').hidden; });
 
     $('#activeFilters').addEventListener('click', (e) => {
-      if (e.target.closest('#btnStatement')) return partyStatement(state.filters.party);
+      if (e.target.closest('#btnStatement')) return openAccount(state.filters.party);
       const c = e.target.closest('[data-clear]');
       if (!c) return;
       const k = c.dataset.clear;
@@ -494,14 +510,17 @@
             ts: Number.isFinite(ts) ? ts : m.ts
           });
           if (!r) return App.toast('مقدرتش أعدّل الحركة', 'err');
+          await Store.syncLinkedPayment(r.move);
           applyResult(r);
           App.toast('اتعدلت الحركة ✓', 'ok', 6000, { label: 'تراجع', run: async () => { const x = await Store.updateMove(m.id, r.old); if (x) { applyResult(x); App.toast('رجعت زي ما كانت', 'ok'); pushSoon(); } } });
           pushSoon();
         } else if (dlg.returnValue === 'delete') {
+          const hadCash = !!(await Store.linkedPayment(m.id));
           const r = await Store.removeMove(m.id);
           if (r) {
+            await Store.syncLinkedPayment(r.move);
             applyResult(r);
-            App.toast('اتلغت الحركة', 'ok', 6000, { label: 'تراجع', run: async () => { const x = await Store.restoreMove(m.id); if (x) { applyResult(x); pushSoon(); } } });
+            App.toast('اتلغت الحركة', 'ok', 6000, { label: 'تراجع', run: async () => { const x = await Store.restoreMove(m.id); if (x) { await Store.syncLinkedPayment(x.move, hadCash); applyResult(x); pushSoon(); } } });
             pushSoon();
           }
         }
@@ -523,6 +542,13 @@
           <button class="btn btn-ghost btn-sm btn-icon" data-item-edit="${esc(it.id)}" type="button" aria-label="تعديل الصنف">${icon('edit', 'i-sm')}</button></div>
         <div class="kpi-value ${it.mat === 'steel' ? 't-steel' : 't-cement'}"><span class="num">${App.fmtD(v)}</span><small>طن</small></div>
         <div class="kpi-sub">${subOf(it.mat, v)} · <span class="num">${App.compact(v * priceFor(it.mat))}</span> ج</div>
+        <div class="row mt-2">${(() => {
+          const ins = state.insights[it.id] || {};
+          const out = [];
+          if (ins.dailyOut > 0 && v > 0) { const d = Math.floor(v / ins.dailyOut); out.push(`<span class="chip-mini ${d <= 7 ? 'bad' : d <= 21 ? 'warn' : ''}">يكفي ~${d} يوم</span>`); }
+          if (ins.avgCost > 0) out.push(`<span class="chip-mini">متوسط الشراء <span class="num">${App.fmt(ins.avgCost)}</span></span>`);
+          return out.join('');
+        })()}</div>
         <div class="bar ${low ? 'low' : it.mat}"><span style="--w:${w.toFixed(1)}%"></span></div>
         <div class="row mt-3" style="justify-content:space-between">
           ${it.low > 0 ? `<span class="badge ${low ? 'b-out' : 'b-soft'}">${low ? icon('alert') + 'تحت الحد' : 'حد التنبيه ' + App.fmtD(it.low)}</span>` : '<span class="t-faint" style="font-size:.74rem">من غير حد تنبيه</span>'}
@@ -598,7 +624,9 @@
     } catch (e) {
       host.innerHTML = `<div class="alert alert-error">${icon('alert')}<div>مشكلة في الرسم: ${esc(errMsg(e))}</div></div>`;
     }
-    renderParties();
+    state.accounts = null;
+    renderAccounts();
+    renderProfit();
   }
 
   function renderByItem(data) {
@@ -613,21 +641,6 @@
         <div class="bar" style="--c1:var(--in);--c2:var(--in);height:6px;margin-top:6px"><span style="--w:${(r.inTon / max * 100).toFixed(1)}%"></span></div>
         <div class="bar" style="--c1:var(--out);--c2:var(--out);height:6px;margin-top:4px"><span style="--w:${(r.outTon / max * 100).toFixed(1)}%"></span></div>
       </div>`).join('');
-  }
-
-  async function renderParties() {
-    if (!state.parties) state.parties = await Store.parties();
-    const q = ($('#partySearch').value || '').trim();
-    const list = state.parties.filter((p) => !q || p.name.includes(q)).slice(0, 60);
-    $('#partiesHost').innerHTML = list.length ? list.map((p) => `
-      <button class="party-row" data-party="${esc(p.name)}" type="button">
-        <div><b>${esc(p.name)}</b><div class="party-stats">
-          ${p.outTon ? `<span class="t-out">صرف <span class="num">${App.fmtD(p.outTon)}</span> طن</span>` : ''}
-          ${p.inTon ? `<span class="t-in">استلام <span class="num">${App.fmtD(p.inTon)}</span> طن</span>` : ''}
-          <span><span class="num">${App.fmt(p.count)}</span> حركة · ${esc(App.relTime(p.last))}</span></div></div>
-        <span class="num t-val">${App.compact(p.outVal + p.inVal)} ج</span>
-      </button>`).join('')
-      : `<div class="empty"><div class="empty-ic">${icon('users', 'i-lg')}</div><p>${q ? 'مفيش جهة بالاسم ده' : 'لسه مفيش جهات — اكتب اسم الجهة وانت بتسجل الحركة'}</p></div>`;
   }
 
   async function refreshPartyList() {
@@ -647,8 +660,8 @@
       $$('#matChips .chip').forEach((c) => c.setAttribute('aria-pressed', c === b ? 'true' : 'false'));
       state.chartMat = b.dataset.mat; loadReports();
     });
-    $('#partiesHost').addEventListener('click', (e) => { const b = e.target.closest('[data-party]'); if (b) showLogFor({ party: b.dataset.party }); });
-    $('#partySearch').addEventListener('input', App.debounce(renderParties, 200));
+    $('#partiesHost').addEventListener('click', (e) => { const b = e.target.closest('[data-party]'); if (b) openAccount(b.dataset.party); });
+    $('#partySearch').addEventListener('input', App.debounce(renderAccounts, 200));
     $('#btnPdf').addEventListener('click', makePdf);
   }
 
@@ -711,11 +724,14 @@
   }
 
   async function backup() {
-    const moves = [];
+    const moves = [], payments = [];
     await Store.eachMove((m) => moves.push(m));
-    const payload = { app: 'binaa-warehouse', version: 2, exportedAt: Date.now(), settings: state.settings, items: state.items, moves };
+    await Store.eachPayment((p) => payments.push(p));
+    const payload = { app: 'binaa-warehouse', version: 3, exportedAt: Date.now(), settings: state.settings, items: state.items, moves, payments };
     App.download('نسخة-المخزن-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(payload), 'application/json');
-    App.toast(`اتحفظت نسخة فيها ${App.fmt(moves.length)} حركة ✓`, 'ok');
+    try { localStorage.setItem(BACKUP_KEY, String(Date.now())); } catch (e) {}
+    App.toast(`اتحفظت نسخة فيها ${App.fmt(moves.length)} حركة و${App.fmt(payments.length)} دفعة ✓`, 'ok');
+    if (state.view === 'dash') renderInsights();
   }
 
   function restore(file) {
@@ -731,6 +747,7 @@
       if (!ok) return;
       try {
         for (let s = 0; s < clean.length; s += 1000) await Store.bulkPut(clean.slice(s, s + 1000), false);
+        if (Array.isArray(data.payments)) await Store.bulkPutPay(data.payments.map((p) => ({ ...p, dirty: 1 })), false);
         if (Array.isArray(data.items)) {
           const have = new Set(state.items.map((i) => i.id));
           state.items = await Store.setItems([...state.items, ...data.items.filter((i) => i && !have.has(i.id))]);
@@ -757,7 +774,7 @@
   function wireSettings() {
     const dlg = App.wireSheet($('#settingsDlg'));
     document.addEventListener('click', (e) => {
-      if (e.target.closest('[data-open-settings]')) { renderCloudBox(); dlg.showModal(); }
+      if (e.target.closest('[data-open-settings]')) { renderCloudBox(); renderPinBox(); $('#setUser').value = userName(); dlg.showModal(); }
     });
     const save = App.debounce(async () => {
       state.settings = await Store.setSettings({
@@ -768,6 +785,7 @@
     }, 400);
     ['#setSteelCap', '#setCementCap', '#setSteelLow', '#setCementLow'].forEach((s) => $(s).addEventListener('input', save));
 
+    $('#setUser').addEventListener('input', App.debounce(() => { try { localStorage.setItem(USER_KEY, $('#setUser').value.trim().slice(0, 40)); } catch (e) {} }, 300));
     $('#btnBackup').addEventListener('click', backup);
     $('#btnRestore').addEventListener('click', () => $('#restoreFile').click());
     $('#restoreFile').addEventListener('change', function () { if (this.files[0]) restore(this.files[0]); this.value = ''; });
@@ -786,15 +804,18 @@
     const st = Sync.status();
     if (!st.on) {
       box.innerHTML = `
-        <div class="alert mb-3">${icon('cloud')}<div>المزامنة مقفولة — البيانات على الجهاز ده بس.<br>عشان الشريك يشوف نفس الأرقام، فعّل المزامنة.</div></div>
-        <div class="field mb-3"><label for="pairIn">عندك رمز ربط من الشريك؟ الصقه هنا</label><input type="text" class="input" id="pairIn" placeholder="BINAA-…" dir="ltr" autocomplete="off" spellcheck="false"></div>
-        <button class="btn btn-primary btn-block" id="btnPair" type="button">${icon('link')}ربط الجهاز</button>
-        <details class="mt-4"><summary class="t-muted" style="cursor:pointer;font-size:.84rem">إعداد جديد من الصفر (أول جهاز)</summary>
+        <div class="alert mb-3">${icon('cloud')}<div>المزامنة مقفولة — البيانات على الجهاز ده بس.<br>فعّلها عشان الشريك يشوف نفس الأرقام لحظة بلحظة.</div></div>
+        <button class="btn btn-primary btn-block btn-lg" id="btnCloudOn" type="button">${icon('cloud')}تفعيل المزامنة (أول جهاز)</button>
+        <div class="field mt-4"><label for="pairIn">الجهاز التاني؟ الصق رمز الربط اللي جالك</label>
+          <div class="row"><input type="text" class="input grow" id="pairIn" placeholder="IKH-…" dir="ltr" autocomplete="off" spellcheck="false" style="width:auto">
+          <button class="btn btn-ghost" id="btnPair" type="button">${icon('link')}ربط</button></div></div>
+        <details class="mt-4"><summary class="t-muted" style="cursor:pointer;font-size:.84rem">متقدم: سحابة Supabase خاصة بيك</summary>
           <div class="field mt-3"><label for="supaUrl">عنوان المشروع (Project URL)</label><input type="url" class="input" id="supaUrl" placeholder="https://xxxx.supabase.co" dir="ltr"></div>
-          <div class="field mt-3"><label for="supaKey">المفتاح العام (anon / publishable key)</label><input type="text" class="input" id="supaKey" placeholder="eyJhbGciOi…" dir="ltr" autocomplete="off" spellcheck="false"></div>
-          <button class="btn btn-primary btn-block mt-3" id="btnConnect" type="button">تفعيل المزامنة</button>
-          <p class="hint mt-3">لازم تشغّل ملف <b>supabase-setup.sql</b> الأول — الخطوات في README.md.</p>
+          <div class="field mt-3"><label for="supaKey">المفتاح العام (publishable / anon)</label><input type="text" class="input" id="supaKey" placeholder="sb_publishable_…" dir="ltr" autocomplete="off" spellcheck="false"></div>
+          <button class="btn btn-ghost btn-block mt-3" id="btnConnect" type="button">تفعيل على السحابة دي</button>
+          <p class="hint mt-3">لازم تشغّل ملف <b>supabase-setup.sql</b> على مشروعك الأول.</p>
         </details>`;
+      $('#btnCloudOn').addEventListener('click', () => connectWith({ ...Sync.DEFAULT_CLOUD, room: Sync.newRoom() }));
       $('#btnPair').addEventListener('click', () => {
         const c = Sync.decodeCode($('#pairIn').value);
         if (!c) return App.toast('الرمز مش مظبوط', 'err');
@@ -813,8 +834,8 @@
     box.innerHTML = `
       <div class="alert alert-ok mb-3">${icon('cloud')}<div><strong>المزامنة شغالة</strong><br>آخر مزامنة: ${esc(st.lastSync ? App.relTime(st.lastSync) : 'لسه')}${st.error ? `<br><span class="t-out">${esc(st.error)}</span>` : ''}</div></div>
       <div class="field mb-3"><label for="pairOut">رمز الربط — ابعته للشريك</label>
-        <textarea class="input" id="pairOut" rows="3" readonly dir="ltr" style="font-size:12px;word-break:break-all;text-align:left">${esc(code)}</textarea>
-        <span class="hint">⚠️ الرمز ده مفتاح البيانات — متبعتوش لحد بره الشركة.</span></div>
+        <textarea class="input" id="pairOut" rows="${st.isDefault ? 1 : 3}" readonly dir="ltr" style="font-size:12px;word-break:break-all;text-align:left">${esc(code)}</textarea>
+        <span class="hint">⚠️ الرمز ده مفتاح البيانات — ابعته للشريك بس، ومتنشروش.</span></div>
       <div class="grid-2">
         <button class="btn btn-ghost" id="btnCopyCode" type="button">${icon('copy')}نسخ الرمز</button>
         <button class="btn btn-ghost" id="btnSyncNow" type="button">${icon('refresh')}زامن دلوقتي</button>
@@ -859,12 +880,377 @@
   }
 
   /* ======================================================================
+     11. الدفع مع الحركة (كاش / آجل)
+     ====================================================================== */
+  function setPay(mode) {
+    state.pay = mode;
+    const seg = $('#paySeg');
+    setSeg(seg, $(`[data-pay="${mode}"]`, seg));
+    updatePayHint();
+  }
+  function updatePayHint() {
+    const party = $('#partyInp').value.trim();
+    const cash = state.pay === 'cash';
+    $('#payHint').textContent = !party
+      ? 'اكتب اسم الجهة عشان الحركة تتسجل في حسابها'
+      : cash
+        ? (state.type === 'out' ? `هيتسجل إن ${party} دفع قيمة البضاعة` : `هيتسجل إننا دفعنا لـ ${party} قيمة البضاعة`)
+        : (state.type === 'out' ? `القيمة هتتسجل دين على ${party}` : `القيمة هتتسجل دين علينا لـ ${party}`);
+  }
+  function wirePay() {
+    $('#paySeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pay]'); if (b) setPay(b.dataset.pay); });
+    $('#partyInp').addEventListener('input', updatePayHint);
+    $('#typeSeg').addEventListener('click', () => setTimeout(updatePayHint));
+  }
+
+  /* ======================================================================
+     12. حسابات العملاء والموردين
+     ====================================================================== */
+  function balPill(b) {
+    if (Math.abs(b) < 0.5) return '<span class="bal-pill zero">خالص</span>';
+    return b > 0
+      ? `<span class="bal-pill owe">عليه <span class="num">${App.fmt(b)}</span> ج</span>`
+      : `<span class="bal-pill due">ليه <span class="num">${App.fmt(-b)}</span> ج</span>`;
+  }
+
+  async function loadAccounts() {
+    if (!state.accounts) state.accounts = await Store.partyAccounts();
+    return state.accounts;
+  }
+
+  async function renderAccounts() {
+    const list = await loadAccounts();
+    const recv = list.reduce((a, p) => a + Math.max(0, p.balance), 0);
+    const pay = list.reduce((a, p) => a + Math.max(0, -p.balance), 0);
+    $('#accSum').innerHTML = `
+      <div class="acc-tile"><span class="kpi-label">مستحق لينا عند العملاء</span><b class="t-brand"><span class="num">${App.fmt(recv)}</span> ج</b></div>
+      <div class="acc-tile"><span class="kpi-label">علينا للموردين</span><b class="t-steel"><span class="num">${App.fmt(pay)}</span> ج</b></div>`;
+    const q = ($('#partySearch').value || '').trim();
+    const rows = list.filter((p) => !q || p.name.includes(q)).slice(0, 80);
+    $('#partiesHost').innerHTML = rows.length ? rows.map((p) => `
+      <button class="party-row" data-party="${esc(p.name)}" type="button">
+        <div><b>${esc(p.name)}</b><div class="party-stats">
+          ${p.outTon ? `<span class="t-out">صرف <span class="num">${App.fmtD(p.outTon)}</span> طن</span>` : ''}
+          ${p.inTon ? `<span class="t-in">استلام <span class="num">${App.fmtD(p.inTon)}</span> طن</span>` : ''}
+          <span>${esc(App.relTime(p.last))}</span></div></div>
+        ${balPill(p.balance)}
+      </button>`).join('')
+      : `<div class="empty"><div class="empty-ic">${icon('users', 'i-lg')}</div><p>${q ? 'مفيش جهة بالاسم ده' : 'لسه مفيش جهات — اكتب اسم الجهة وانت بتسجل الحركة'}</p></div>`;
+  }
+
+  async function openAccount(name) {
+    if (!name) return;
+    state.accParty = name;
+    $('#accTitle').textContent = 'حساب: ' + name;
+    const st = await Store.statement(name);
+    state.accStatement = st;
+    const b = st.balance;
+    $('#accHead').innerHTML = `
+      <div class="acc-tile"><span class="kpi-label">إجمالي اللي خده (مدين)</span><b><span class="num">${App.fmt(st.debit)}</span> ج</b></div>
+      <div class="acc-tile"><span class="kpi-label">إجمالي اللي اتسدد (دائن)</span><b><span class="num">${App.fmt(st.credit)}</span> ج</b></div>
+      <div class="acc-tile"><span class="kpi-label">الرصيد</span><b>${balPill(b)}</b></div>`;
+    if (!st.rows.length) {
+      $('#accRows').innerHTML = `<div class="empty"><p>مفيش تعاملات مع الجهة دي</p></div>`;
+    } else {
+      const rows = [...st.rows].reverse().slice(0, 300);
+      $('#accRows').innerHTML = `<div class="st-scroll"><table class="st-table"><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>${
+        rows.map((r, i) => {
+          const desc = r.kind === 'move'
+            ? `${r.m.type === 'out' ? 'صرف' : 'استلام'} ${App.fmtD(r.m.qtyTon)} طن ${esc(itemName(r.m.item))}${r.m.ref ? ' · إذن ' + esc(r.m.ref) : ''}`
+            : `<button class="t-brand" data-edit-pay="${esc(r.p.id)}" type="button" style="text-align:start">${r.p.dir === 'in' ? 'دفعة مستلمة' : 'دفعة مسددة'}${r.p.method === 'cheque' ? ' (شيك)' : r.p.method === 'transfer' ? ' (تحويل)' : ''}${r.p.note ? ' — ' + esc(r.p.note) : ''}</button>`;
+          return `<tr style="--d:${Math.min(i, 30)}"><td class="num">${App.fmtDate(r.ts)}</td><td>${desc}</td>
+            <td class="num">${r.debit ? App.fmt(r.debit) : ''}</td><td class="num">${r.credit ? App.fmt(r.credit) : ''}</td>
+            <td class="num ${r.balance > 0 ? 't-brand' : r.balance < 0 ? 't-steel' : ''}">${App.fmt(r.balance)}</td></tr>`;
+        }).join('')}</tbody></table></div>`;
+    }
+    const dlg = $('#accDlg');
+    if (!dlg.open) dlg.showModal();
+  }
+
+  function wireAccounts() {
+    App.wireSheet($('#accDlg'));
+    $('#accPay').addEventListener('click', () => {
+      const b = state.accStatement ? state.accStatement.balance : 0;
+      openPay(null, { party: state.accParty, dir: b < 0 ? 'out' : 'in', amount: Math.abs(b) || '' });
+    });
+    $('#accMoves').addEventListener('click', () => { $('#accDlg').close(); showLogFor({ party: state.accParty }); });
+    $('#accPdf').addEventListener('click', () => printStatement(state.accStatement));
+    $('#accWa').addEventListener('click', () => {
+      const st = state.accStatement; if (!st) return;
+      const b = st.balance;
+      const txt = Math.abs(b) < 0.5
+        ? `السلام عليكم ${st.party}، حسابكم معانا خالص. شكراً لتعاملكم مع الإخلاص لتجارة مواد البناء.`
+        : b > 0
+          ? `السلام عليكم ${st.party}، ده تذكير ودي إن رصيد حسابكم لدى الإخلاص لتجارة مواد البناء ${App.fmt(b)} جنيه حتى ${App.fmtDate(Date.now())}. شكراً لتعاملكم معانا.`
+          : `السلام عليكم ${st.party}، رصيدكم المستحق لدينا ${App.fmt(-b)} جنيه حتى ${App.fmtDate(Date.now())}. الإخلاص لتجارة مواد البناء.`;
+      window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank', 'noopener');
+    });
+    $('#accRows').addEventListener('click', (e) => { const b = e.target.closest('[data-edit-pay]'); if (b) openPay(b.dataset.editPay); });
+    $('#btnNewPay').addEventListener('click', () => openPay(null, {}));
+  }
+
+  /* ---------- نافذة الدفعة ---------- */
+  function setPayDir(dir) {
+    const seg = $('#payDirSeg');
+    seg.dataset.dir = dir;
+    setSeg(seg, $(`[data-dir="${dir}"]`, seg));
+  }
+  async function openPay(id, preset = {}) {
+    const p = id ? await Store.getPay(id) : null;
+    state.editingPay = p;
+    $('#payDlgTitle').textContent = p ? 'تعديل دفعة' : 'تسجيل دفعة';
+    setPayDir(p ? p.dir : preset.dir || 'in');
+    $('#pParty').value = p ? p.party : preset.party || '';
+    $('#pAmount').value = p ? p.amount : (preset.amount ? Math.round(preset.amount) : '');
+    $('#pMethod').value = p ? (p.method || 'cash') : 'cash';
+    $('#pRef').value = p ? (p.ref.startsWith('M:') ? '' : p.ref) : '';
+    $('#pTs').value = App.toLocalInput(p ? p.ts : Date.now());
+    $('#pNote').value = p ? p.note : '';
+    $('#payDelete').hidden = !p;
+    $('#payBalHint').hidden = true;
+    const dlg = $('#payDlg');
+    dlg.returnValue = '';
+    dlg.showModal();
+    showPayHint();
+  }
+  async function showPayHint() {
+    const name = $('#pParty').value.trim();
+    const acc = (await loadAccounts()).find((a) => a.name === name);
+    const h = $('#payBalHint');
+    if (!acc) { h.hidden = true; return; }
+    h.hidden = false;
+    h.innerHTML = `${icon('users')}<div>رصيد ${esc(name)} الحالي: ${balPill(acc.balance)}</div>`;
+  }
+  function wirePayDlg() {
+    const dlg = App.wireSheet($('#payDlg'));
+    $('#payDirSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-dir]'); if (b) setPayDir(b.dataset.dir); });
+    $('#pParty').addEventListener('change', showPayHint);
+    dlg.addEventListener('close', async () => {
+      const act = dlg.returnValue, cur = state.editingPay;
+      state.editingPay = null;
+      try {
+        if (act === 'delete' && cur) {
+          await Store.updatePayment(cur.id, { del: 1 });
+          App.toast('اتحذفت الدفعة', 'ok', 6000, { label: 'تراجع', run: async () => { await Store.updatePayment(cur.id, { del: 0 }); afterPayChange(); } });
+        } else if (act === 'save') {
+          const party = $('#pParty').value.trim();
+          const amount = N($('#pAmount').value);
+          if (!party) return App.toast('اكتب اسم الجهة', 'err');
+          if (!(amount > 0)) return App.toast('اكتب المبلغ', 'err');
+          const ts = new Date($('#pTs').value).getTime();
+          const data = { party, amount, dir: $('#payDirSeg').dataset.dir || 'in', method: $('#pMethod').value,
+                         ref: $('#pRef').value.trim(), note: $('#pNote').value.trim(), ts: Number.isFinite(ts) ? ts : Date.now(), by: userName() };
+          if (cur) { if (cur.ref.startsWith('M:')) data.ref = cur.ref; await Store.updatePayment(cur.id, data); }
+          else await Store.addPayment(data);
+          App.toast(`اتسجلت الدفعة ✓ ${App.fmt(amount)} ج`, 'ok');
+        } else return;
+        afterPayChange();
+      } catch (e) { App.toast('مشكلة: ' + errMsg(e), 'err'); }
+    });
+  }
+  function afterPayChange() {
+    state.accounts = null;
+    pushSoon();
+    if (state.view === 'reports') renderAccounts();
+    if (state.view === 'dash') renderInsights();
+    if ($('#accDlg').open && state.accParty) openAccount(state.accParty);
+  }
+
+  /* ======================================================================
+     13. الجرد
+     ====================================================================== */
+  function openCount() {
+    const items = state.items.filter((i) => !i.hidden || Math.abs(state.itemBal[i.id] || 0) > 0);
+    $('#countRows').innerHTML = `<div class="count-row t-faint" style="font-size:.72rem"><span>الصنف</span><span>على النظام</span><span>الفعلي (طن)</span></div>` +
+      items.map((it) => `<div class="count-row"><span><b>${esc(it.name)}</b><br><span class="diff" data-diff="${esc(it.id)}"></span></span>
+        <span class="num">${App.fmtD(state.itemBal[it.id] || 0)}</span>
+        <div class="input-wrap"><input type="number" inputmode="decimal" min="0" step="any" data-count="${esc(it.id)}" placeholder="—"></div></div>`).join('');
+    $('#countSum').textContent = 'مفيش فروق لسه';
+    const dlg = $('#countDlg');
+    dlg.returnValue = '';
+    dlg.showModal();
+  }
+  function countDiffs() {
+    const out = [];
+    $$('#countRows [data-count]').forEach((inp) => {
+      if (inp.value === '') return;
+      const id = inp.dataset.count;
+      const diff = R3(N(inp.value) - (state.itemBal[id] || 0));
+      if (Math.abs(diff) >= 0.001) out.push({ id, diff });
+    });
+    return out;
+  }
+  function wireCount() {
+    $('#btnStocktake').addEventListener('click', openCount);
+    const dlg = App.wireSheet($('#countDlg'));
+    $('#countRows').addEventListener('input', (e) => {
+      const inp = e.target.closest('[data-count]'); if (!inp) return;
+      const id = inp.dataset.count;
+      const d = inp.value === '' ? 0 : R3(N(inp.value) - (state.itemBal[id] || 0));
+      const el = $(`[data-diff="${CSS.escape(id)}"]`);
+      el.className = 'diff ' + (d > 0 ? 't-in' : d < 0 ? 't-out' : 't-faint');
+      el.textContent = inp.value === '' ? '' : Math.abs(d) < 0.001 ? 'مطابق ✓' : (d > 0 ? 'زيادة ' : 'عجز ') + App.fmtD(Math.abs(d)) + ' طن';
+      const all = countDiffs();
+      $('#countSum').innerHTML = all.length ? `${icon('scale')}<div>هيتسجل <b>${all.length}</b> تسوية — زيادة <b class="num">${App.fmtD(all.filter((x) => x.diff > 0).reduce((a, x) => a + x.diff, 0))}</b> طن · عجز <b class="num">${App.fmtD(-all.filter((x) => x.diff < 0).reduce((a, x) => a + x.diff, 0))}</b> طن</div>` : 'مفيش فروق لسه';
+    });
+    dlg.addEventListener('close', async () => {
+      if (dlg.returnValue !== 'save') return;
+      const diffs = countDiffs();
+      if (!diffs.length) return App.toast('مفيش فروق — المخزن مطابق ✓', 'ok');
+      const map = itemMap();
+      let last = null;
+      for (const d of diffs) {
+        const it = map[d.id];
+        last = await Store.addMove({ type: d.diff > 0 ? 'in' : 'out', mat: it.mat, item: it.id, qtyTon: Math.abs(d.diff),
+          unitPrice: priceFor(it.mat), note: 'تسوية جرد', ref: 'جرد ' + App.fmtDate(Date.now()), by: userName() });
+      }
+      applyResult(last);
+      App.toast(`اتسجل الجرد ✓ ${diffs.length} تسوية`, 'ok');
+      pushSoon();
+    });
+  }
+
+  /* ======================================================================
+     14. التنبيهات الذكية والتحليلات
+     ====================================================================== */
+  const BACKUP_KEY = 'binaa_last_backup';
+  async function renderInsights() {
+    const [ins, accs, n] = await Promise.all([Store.itemInsights(), loadAccounts(), Store.count()]);
+    state.insights = ins;
+    const cards = [];
+    /* أصناف هتخلص قريب */
+    for (const it of state.items) {
+      const bal = state.itemBal[it.id] || 0, rate = (ins[it.id] || {}).dailyOut || 0;
+      if (rate <= 0 || bal <= 0) continue;
+      const days = Math.floor(bal / rate);
+      if (days <= 21) cards.push({ cls: days <= 7 ? 'bad' : 'warn', ic: 'alert', k: days <= 7 ? 'out' : '', t: `${it.name} هيخلص خلال ~${days} يوم`, s: `بتصرف ${App.fmtD(rate)} طن في اليوم · الرصيد ${App.fmtD(bal)} طن`, go: 'items' });
+    }
+    const recv = accs.filter((a) => a.balance > 0.5);
+    if (recv.length) {
+      const total = recv.reduce((a, p) => a + p.balance, 0);
+      const top = [...recv].sort((a, b) => b.balance - a.balance)[0];
+      cards.push({ cls: '', ic: 'coins', k: '', t: `${App.fmt(total)} ج مستحقة عند ${recv.length} عميل`, s: `أكبرهم: ${top.name} (${App.fmt(top.balance)} ج)`, go: 'reports' });
+    }
+    const payable = accs.filter((a) => a.balance < -0.5).reduce((a, p) => a - p.balance, 0);
+    if (payable > 0) cards.push({ cls: '', ic: 'up', k: 'steel', t: `علينا ${App.fmt(payable)} ج للموردين`, s: 'افتح التقارير عشان تشوف التفاصيل', go: 'reports' });
+    let lastB = 0; try { lastB = +localStorage.getItem(BACKUP_KEY) || 0; } catch (e) {}
+    if (n > 0 && Date.now() - lastB > 7 * 864e5) cards.push({ cls: 'warn', ic: 'shield', k: '', t: lastB ? `آخر نسخة احتياطية ${App.relTime(lastB)}` : 'لسه ما عملتش نسخة احتياطية', s: 'اضغط هنا وخُد نسخة دلوقتي — دي أمانك الحقيقي', act: 'backup' });
+    if (!Sync.isOn() && n > 0) cards.push({ cls: '', ic: 'cloud', k: 'steel', t: 'المزامنة مقفولة', s: 'فعّلها بضغطة عشان الشريك يشوف نفس الأرقام', act: 'settings' });
+    if (!cards.length) cards.push({ cls: '', ic: 'check', k: 'in', t: 'كله تمام', s: 'مفيش أصناف قربت تخلص ولا حاجة محتاجة انتباهك' });
+    $('#insightsHost').innerHTML = cards.map((c, i) => `
+      <button class="insight ${c.cls} reveal" style="--d:${i}" type="button" ${c.go ? `data-go="${c.go}"` : ''} ${c.act ? `data-insight="${c.act}"` : ''}>
+        <span class="kpi-ic ${c.k}">${icon(c.ic, 'i-sm')}</span><span><b>${esc(c.t)}</b><span>${esc(c.s)}</span></span></button>`).join('');
+  }
+  function wireInsights() {
+    $('#insightsHost').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-insight]'); if (!b) return;
+      if (b.dataset.insight === 'backup') backup();
+      else { renderCloudBox(); $('#settingsDlg').showModal(); }
+    });
+  }
+
+  async function renderProfit() {
+    const ins = await Store.itemInsights();
+    state.insights = ins;
+    let profit = 0, any = false;
+    for (const v of Object.values(ins)) if (v.profit !== null) { profit += v.profit; any = true; }
+    const stockVal = Object.entries(state.itemBal).reduce((a, [id, t]) => a + Math.max(0, t) * ((ins[id] || {}).avgCost || 0), 0);
+    $('#profitHost').innerHTML = `
+      <div class="acc-tile"><span class="kpi-label">الربح التقديري من البيع</span><b class="${profit >= 0 ? 't-in' : 't-out'}"><span class="num">${any ? App.fmt(profit) : '—'}</span> ج</b><span class="hint">سعر البيع − متوسط تكلفة الشراء</span></div>
+      <div class="acc-tile"><span class="kpi-label">المخزون بسعر التكلفة</span><b><span class="num">${App.fmt(stockVal)}</span> ج</b><span class="hint">الرصيد × متوسط سعر الشراء</span></div>`;
+  }
+
+  /* ======================================================================
+     15. طباعة إذن صرف/استلام وكشف حساب
+     ====================================================================== */
+  async function printVoucher(id) {
+    const m = await Store.getMove(id);
+    if (!m) return App.toast('الحركة مش موجودة', 'err');
+    const linked = await Store.linkedPayment(id);
+    Report.printHtml(Report.buildVoucherHtml({ m, itemName: itemName(m.item), logo: absUrl('assets/icon.svg'), paid: !!(linked && !linked.del) }));
+  }
+  function printStatement(st) {
+    if (!st) return;
+    Report.printHtml(Report.buildStatementHtml({ st, itemName, logo: absUrl('assets/icon.svg') }));
+    App.toast('اختار "حفظ كـ PDF" من نافذة الطباعة', 'warn', 5200);
+  }
+
+  /* ======================================================================
+     16. القفل برمز سري (PBKDF2 — الرمز نفسه مش بيتخزن)
+     ملحوظة أمانة: ده قفل للشاشة على الجهاز (عشان حد يمسك الموبايل ما يفتحش
+     المخزن)، مش تشفير للبيانات نفسها.
+     ====================================================================== */
+  const PIN_KEY = 'binaa_pin';
+  const UNLOCK_KEY = 'binaa_unlocked';
+  async function pinHash(pin, saltHex) {
+    const salt = saltHex ? Uint8Array.from(saltHex.match(/../g), (h) => parseInt(h, 16)) : crypto.getRandomValues(new Uint8Array(16));
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' }, key, 256);
+    const hex = (b) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, '0')).join('');
+    return { salt: hex(salt), hash: hex(bits) };
+  }
+  function getPin() { try { return JSON.parse(localStorage.getItem(PIN_KEY) || 'null'); } catch (e) { return null; } }
+  function lockIfNeeded() {
+    const pin = getPin();
+    let unlocked = false; try { unlocked = sessionStorage.getItem(UNLOCK_KEY) === '1'; } catch (e) {}
+    if (!pin || unlocked) return;
+    $('#lockScreen').hidden = false;
+    setTimeout(() => $('#lockPin').focus(), 50);
+  }
+  let pinTries = 0;
+  function wireLock() {
+    $('#lockForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pin = getPin(); if (!pin) { $('#lockScreen').hidden = true; return; }
+      if (pinTries >= 5) { $('#lockErr').textContent = 'محاولات كتير — استنى شوية'; return; }
+      const h = await pinHash($('#lockPin').value, pin.salt);
+      if (h.hash === pin.hash) {
+        try { sessionStorage.setItem(UNLOCK_KEY, '1'); } catch (er) {}
+        $('#lockScreen').hidden = true; pinTries = 0;
+      } else {
+        pinTries++;
+        $('#lockErr').textContent = 'الرمز غلط';
+        $('#lockPin').value = '';
+        const box = $('.lock-box'); box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+        if (pinTries >= 5) setTimeout(() => { pinTries = 0; $('#lockErr').textContent = ''; }, 30000);
+      }
+    });
+  }
+  function renderPinBox() {
+    const box = $('#pinBox');
+    if (!(global.crypto && crypto.subtle)) {
+      box.innerHTML = '<p class="hint">القفل محتاج اتصال آمن (https) — هيشتغل لما تفتح الموقع من لينكه على النت.</p>';
+      return;
+    }
+    const on = !!getPin();
+    box.innerHTML = on
+      ? `<div class="alert alert-ok mb-3">${icon('shield')}<div>القفل شغال — الرمز بيتطلب كل ما تفتح التطبيق.</div></div>
+         <button class="btn btn-danger-ghost btn-sm" id="pinOff" type="button">شيل القفل</button>`
+      : `<div class="row"><div class="input-wrap grow"><input type="password" inputmode="numeric" id="pinNew" maxlength="12" placeholder="رمز من 4 أرقام أو أكتر" autocomplete="new-password"></div>
+         <button class="btn btn-primary" id="pinSet" type="button">تفعيل القفل</button></div>
+         <p class="hint mt-2">لو نسيت الرمز: امسح بيانات الموقع من المتصفح (البيانات المتزامنة بترجع من السحابة).</p>`;
+    if (on) $('#pinOff').addEventListener('click', async () => {
+      const ok = await App.confirm('القفل هيتشال من الجهاز ده.', { title: 'شيل القفل', okText: 'أيوه' });
+      if (ok) { try { localStorage.removeItem(PIN_KEY); } catch (e) {} renderPinBox(); App.toast('اتشال القفل', 'ok'); }
+    });
+    else $('#pinSet').addEventListener('click', async () => {
+      const v = $('#pinNew').value;
+      if (!/^\d{4,12}$/.test(v)) return App.toast('الرمز لازم يكون أرقام من 4 لـ 12', 'err');
+      const h = await pinHash(v);
+      try { localStorage.setItem(PIN_KEY, JSON.stringify(h)); sessionStorage.setItem(UNLOCK_KEY, '1'); } catch (e) {}
+      renderPinBox(); App.toast('اتفعّل القفل ✓', 'ok');
+    });
+  }
+  const global = window;
+
+  /* ======================================================================
      10. التحديث الشامل والتشغيل
      ====================================================================== */
   async function refreshAll() {
     [state.balance, state.itemBal, state.items] = await Promise.all([Store.getBalance(), Store.getItemBalances(), Store.getItems()]);
-    state.parties = null;
-    fillItemSelect($('#itemSelect'), state.mat, $('#itemSelect').value);
+    state.parties = null; state.accounts = null;
+    state.settings = await Store.getSettings(); fillPrices();
+    fillItemSelect($('#itemSelect'), state.mat, $('#itemSelect').value); fillFilterItems();
     renderBalance(); renderPreview(); refreshPartyList(); updateCount();
     onEnter(state.view);
   }
@@ -887,9 +1273,11 @@
         await Promise.all([Store.getSettings(), Store.getBalance(), Store.getItemBalances(), Store.getItems()]);
 
       greet(); fillPrices(); fillSettingsForm();
+      wireLock(); lockIfNeeded();
       wirePrices(); wireNav(); wireForm(); wireLog(); wireEdit(); wireItems(); wireReports(); wireSettings(); wireSyncPill();
+      wirePay(); wireAccounts(); wirePayDlg(); wireCount(); wireInsights();
       fillFilterItems();
-      setMat('steel'); setType('out');
+      setMat('steel'); setType('out'); setPay('cash');
       refreshPartyList(); updateCount();
 
       const start = location.hash.slice(1);

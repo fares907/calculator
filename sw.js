@@ -4,10 +4,10 @@
    الملفات الثابتة: النسخة المحفوظة الأول وبنحدّثها في الخلفية
    طلبات المزامنة (Supabase) مبتتحفظش أبداً.
    ========================================================================== */
-const VERSION = 'binaa-v2.0.0';
+const VERSION = 'binaa-v3.0.0';
 const CORE = [
   './', 'index.html', 'calculator.html', 'warehouse.html', 'manifest.webmanifest',
-  'assets/css/app.css', 'assets/icon.svg', 'assets/icon-maskable.svg',
+  'assets/css/app.css', 'assets/icon.svg', 'assets/icon-maskable.svg', 'assets/icon-192.png', 'assets/apple-touch-icon.png',
   'assets/js/core.js', 'assets/js/icons.js', 'assets/js/store.js', 'assets/js/sync.js',
   'assets/js/report.js', 'assets/js/warehouse.js', 'assets/js/calculator.js'
 ];

@@ -1,15 +1,15 @@
 {
-  "name": "نظام مواد البناء",
-  "short_name": "مواد البناء",
-  "description": "حاسبة أسعار ومخزن الحديد والأسمنت",
+  "name": "الإخلاص — المخزن والحاسبة",
+  "short_name": "مخزن الإخلاص",
+  "description": "مخزن وحاسبة الحديد والأسمنت — شركة الإخلاص لتجارة مواد البناء",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0b0f19",
-  "theme_color": "#0b0f19",
+  "background_color": "#14100C",
+  "theme_color": "#14100C",
   "icons": [
     {
       "src": "assets/icon.svg",
@@ -18,9 +18,21 @@
       "purpose": "any"
     },
     {
-      "src": "assets/icon-maskable.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],

@@ -11,25 +11,20 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="مواد البناء">
 <meta name="description" content="نظام مواد البناء — حاسبة الأسعار ومخزن الحديد والأسمنت">
-<title>نظام مواد البناء</title>
+<title>الإخلاص — المخزن والحاسبة</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300..700&display=swap">
 <link rel="stylesheet" href="assets/css/app.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <script src="assets/js/core.js"></script>
 <style>
   .home { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; gap: var(--sp-7); padding-block: var(--sp-7); }
   .home-top { display: flex; justify-content: space-between; align-items: center; }
   .hero-t { text-align: center; }
-  .hero-t .logo {
-    width: 84px; height: 84px; margin: 0 auto var(--sp-5); border-radius: 26px; display: grid; place-items: center;
-    background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: var(--brand-ink);
-    box-shadow: 0 20px 50px -18px var(--brand); animation: float 6s ease-in-out infinite;
-  }
-  .hero-t .logo .i { width: 44px; height: 44px; stroke-width: 1.8; }
+  .hero-t .logo { width: 96px; height: 96px; margin: 0 auto var(--sp-5); filter: drop-shadow(0 22px 40px rgba(176,101,58,.45)); animation: float 6s ease-in-out infinite; }
   @keyframes float { 50% { transform: translateY(-8px) rotate(-3deg); } }
   .hero-t h1 { font-size: clamp(2rem, 8vw, 3.4rem); font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
   .hero-t p { color: var(--muted); margin-top: var(--sp-3); font-size: clamp(.95rem, 2.4vw, 1.1rem); }
@@ -65,9 +60,9 @@
   </div>
 
   <header class="hero-t reveal">
-    <div class="logo"><svg class="i"><use href="#i-warehouse"/></svg></div>
-    <h1><span class="grad-text">نظام مواد البناء</span></h1>
-    <p>حاسبة الأسعار · مخزن الحديد والأسمنت · تقارير ومزامنة</p>
+    <img class="logo" src="assets/icon.svg" alt="شعار الإخلاص" width="96" height="96">
+    <h1><span class="grad-text">الإخلاص</span></h1>
+    <p>نظام المخزن والحاسبة — حديد · أسمنت · حسابات · تقارير</p>
   </header>
 
   <nav class="nav-grid">

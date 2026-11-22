@@ -147,7 +147,9 @@
     return toastHost;
   }
   const TOAST_ICON = { ok: '✓', err: '!', warn: '⚠', info: 'i' };
-  function toast(msg, kind, ms, action) {
+  function toast(msg, kind, ms, ...actions) {
+    actions = actions.filter(Boolean);
+    const action = actions.length ? actions : null;
     kind = kind || 'info';
     const host = ensureToastHost();
     const el = document.createElement('div');
@@ -165,12 +167,12 @@
       el.classList.remove('show');
       setTimeout(() => el.remove(), 320);
     };
-    if (action) {
+    for (const act of actions) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'toast-act';
-      b.textContent = action.label;
-      b.addEventListener('click', () => { close(); action.run(); });
+      b.textContent = act.label;
+      b.addEventListener('click', () => { close(); act.run(); });
       el.appendChild(b);
     }
     host.appendChild(el);

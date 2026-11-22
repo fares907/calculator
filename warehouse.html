@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="assets/css/app.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <script src="assets/js/core.js"></script>
 </head>
 <body>
@@ -30,8 +30,8 @@
   <!-- ══════════ الشريط الجانبي (كمبيوتر وآيباد أفقي) ══════════ -->
   <aside class="sidebar" aria-label="القائمة الرئيسية">
     <a href="index.html" class="brand">
-      <span class="brand-mark"><svg class="i"><use href="#i-warehouse"/></svg></span>
-      <span class="brand-name"><b>المخزن</b><small>نظام مواد البناء</small></span>
+      <img class="brand-logo" src="assets/icon.svg" alt="" width="40" height="40">
+      <span class="brand-name"><b>المخزن</b><small>الإخلاص لمواد البناء</small></span>
     </a>
     <nav class="side-nav">
       <button class="side-btn" data-go="dash" type="button"><svg class="i"><use href="#i-home"/></svg>اللوحة<kbd>1</kbd></button>
@@ -55,7 +55,7 @@
     <!-- شريط علوي للموبايل -->
     <div class="mtop">
       <a href="index.html" class="brand">
-        <span class="brand-mark"><svg class="i"><use href="#i-warehouse"/></svg></span>
+        <img class="brand-logo" src="assets/icon.svg" alt="" width="40" height="40">
         <span class="brand-name"><b>المخزن</b></span>
       </a>
       <button class="sync-pill" data-sync-pill type="button"><span class="dot"></span><span data-sync-text>محلي</span></button>
@@ -116,6 +116,11 @@
           <div class="kpi-value"><span class="num" id="k30">0</span><small>حركة</small></div>
           <div id="spark30" class="mt-2"></div>
         </div>
+      </div>
+
+      <div class="card mt-4 reveal" style="--d:5" id="insightsCard">
+        <div class="card-head"><div class="card-title"><svg class="i"><use href="#i-zap"/></svg>تنبيهات ذكية</div><span class="card-sub">محسوبة من حركتك الفعلية آخر 30 يوم</span></div>
+        <div class="insights" id="insightsHost"></div>
       </div>
 
       <div class="two-col mt-4">
@@ -206,6 +211,14 @@
               <label for="refInp">رقم الإذن / الفاتورة</label>
               <input type="text" class="input" id="refInp" placeholder="اختياري" maxlength="60">
             </div>
+            <div class="field span-all" id="payField">
+              <label>الدفع</label>
+              <div class="seg" id="paySeg" style="--n:2;--i:0">
+                <button class="seg-btn" data-pay="cash" type="button" aria-pressed="true"><svg class="i i-sm"><use href="#i-coins"/></svg>كاش — اتدفع دلوقتي</button>
+                <button class="seg-btn" data-pay="credit" type="button" aria-pressed="false"><svg class="i i-sm"><use href="#i-calendar"/></svg>آجل — على الحساب</button>
+              </div>
+              <span class="hint" id="payHint">بيتسجل في حساب الجهة أوتوماتيك</span>
+            </div>
             <div class="field">
               <label for="priceInp">سعر الطن في الحركة دي</label>
               <div class="input-wrap"><input type="number" id="priceInp" inputmode="decimal" min="0" step="any"><span class="unit">ج/طن</span></div>
@@ -283,7 +296,10 @@
     <section class="view" data-view="items" aria-label="الأصناف">
       <header class="page-head">
         <div><h1>الأصناف</h1><p>رصيد كل مقاس ونوع لوحده — مع حد تنبيه لكل صنف</p></div>
-        <button class="btn btn-primary" id="btnAddItem" type="button"><svg class="i"><use href="#i-plus"/></svg>صنف جديد</button>
+        <div class="quick">
+          <button class="btn btn-ghost" id="btnStocktake" type="button"><svg class="i"><use href="#i-scale"/></svg>جرد المخزن</button>
+          <button class="btn btn-primary" id="btnAddItem" type="button"><svg class="i"><use href="#i-plus"/></svg>صنف جديد</button>
+        </div>
       </header>
       <div class="card-title mb-3"><svg class="i t-steel"><use href="#i-steel"/></svg>حديد التسليح</div>
       <div class="items-grid mb-4" id="itemsSteel"></div>
@@ -322,9 +338,12 @@
         <div class="card">
           <div class="card-head"><div class="card-title"><svg class="i"><use href="#i-box"/></svg>الحركة حسب الصنف</div><span class="card-sub" id="byItemSub"></span></div>
           <div id="byItemHost"></div>
+          <div class="profit mt-4" id="profitHost"></div>
         </div>
         <div class="card">
-          <div class="card-head"><div class="card-title"><svg class="i"><use href="#i-users"/></svg>دفتر الجهات</div><span class="card-sub">اضغط على أي جهة لكشف حسابها</span></div>
+          <div class="card-head"><div class="card-title"><svg class="i"><use href="#i-users"/></svg>حسابات العملاء والموردين</div>
+            <button class="btn btn-ghost btn-sm" id="btnNewPay" type="button"><svg class="i i-sm"><use href="#i-coins"/></svg>تسجيل دفعة</button></div>
+          <div class="acc-sum" id="accSum"></div>
           <div class="input-wrap mb-3"><span class="pre"><svg class="i"><use href="#i-search"/></svg></span><input type="search" id="partySearch" placeholder="دوّر على عميل أو مورد…"></div>
           <div id="partiesHost"></div>
         </div>
@@ -383,6 +402,74 @@
   </form>
 </dialog>
 
+<!-- ══════════ نافذة دفعة ══════════ -->
+<dialog class="sheet" id="payDlg">
+  <form method="dialog" class="sheet-body" novalidate>
+    <div class="sheet-grip"></div>
+    <div class="sheet-head"><h3 class="sheet-title" id="payDlgTitle">تسجيل دفعة</h3><button class="btn btn-ghost btn-icon btn-sm" type="button" data-close aria-label="قفل"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="seg mb-4" id="payDirSeg" style="--n:2;--i:0">
+      <button class="seg-btn" data-dir="in" type="button" aria-pressed="true"><svg class="i i-sm"><use href="#i-down"/></svg>استلمنا فلوس (من عميل)</button>
+      <button class="seg-btn" data-dir="out" type="button" aria-pressed="false"><svg class="i i-sm"><use href="#i-up"/></svg>دفعنا فلوس (لمورد)</button>
+    </div>
+    <div class="form-grid">
+      <div class="field span-all"><label for="pParty">الجهة</label><input type="text" class="input" id="pParty" list="partiesList" maxlength="120" placeholder="اسم العميل أو المورد"></div>
+      <div class="field"><label for="pAmount">المبلغ</label><div class="input-wrap"><input type="number" id="pAmount" inputmode="decimal" min="0" step="any" placeholder="0"><span class="unit">جنيه</span></div></div>
+      <div class="field"><label for="pMethod">الطريقة</label><select class="input" id="pMethod"><option value="cash">كاش</option><option value="transfer">تحويل / فودافون كاش</option><option value="cheque">شيك</option></select></div>
+      <div class="field"><label for="pRef">رقم الإيصال</label><input type="text" class="input" id="pRef" maxlength="60" placeholder="اختياري"></div>
+      <div class="field"><label for="pTs">التاريخ</label><input type="datetime-local" class="input" id="pTs"></div>
+      <div class="field span-all"><label for="pNote">ملاحظة</label><input type="text" class="input" id="pNote" maxlength="300"></div>
+    </div>
+    <div class="alert mt-4" id="payBalHint" hidden></div>
+    <div class="sheet-actions mt-5">
+      <button class="btn btn-primary" value="save"><svg class="i"><use href="#i-check"/></svg>حفظ الدفعة</button>
+      <button class="btn btn-danger-ghost" value="delete" id="payDelete" hidden><svg class="i"><use href="#i-trash"/></svg>حذف الدفعة</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ══════════ نافذة حساب جهة ══════════ -->
+<dialog class="sheet sheet-wide" id="accDlg">
+  <div class="sheet-body">
+    <div class="sheet-grip"></div>
+    <div class="sheet-head"><h3 class="sheet-title" id="accTitle">حساب</h3><button class="btn btn-ghost btn-icon btn-sm" type="button" data-close aria-label="قفل"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="acc-head" id="accHead"></div>
+    <div class="row mt-4 mb-4">
+      <button class="btn btn-primary btn-sm" id="accPay" type="button"><svg class="i i-sm"><use href="#i-coins"/></svg>تسجيل دفعة</button>
+      <button class="btn btn-ghost btn-sm" id="accPdf" type="button"><svg class="i i-sm"><use href="#i-printer"/></svg>كشف حساب PDF</button>
+      <button class="btn btn-ghost btn-sm" id="accWa" type="button"><svg class="i i-sm"><use href="#i-link"/></svg>رسالة تذكير</button>
+      <button class="btn btn-ghost btn-sm" id="accMoves" type="button"><svg class="i i-sm"><use href="#i-list"/></svg>الحركات في السجل</button>
+    </div>
+    <div id="accRows"></div>
+  </div>
+</dialog>
+
+<!-- ══════════ نافذة الجرد ══════════ -->
+<dialog class="sheet sheet-wide" id="countDlg">
+  <form method="dialog" class="sheet-body" novalidate>
+    <div class="sheet-grip"></div>
+    <div class="sheet-head"><h3 class="sheet-title">جرد المخزن</h3><button class="btn btn-ghost btn-icon btn-sm" type="button" data-close aria-label="قفل"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <p class="sheet-text" style="margin-top:0">اكتب الكمية اللي عدّيتها فعلاً لكل صنف. الفرق بيتسجل كحركة "تسوية جرد" — وسيب الخانة فاضية لو الصنف ما اتعدّش.</p>
+    <div id="countRows"></div>
+    <div class="alert mt-4" id="countSum">مفيش فروق لسه</div>
+    <div class="sheet-actions mt-5">
+      <button class="btn btn-primary" value="save" id="countSave"><svg class="i"><use href="#i-check"/></svg>اعتماد الجرد</button>
+      <button class="btn btn-ghost" value="cancel">إلغاء</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ══════════ قفل التطبيق ══════════ -->
+<div class="lock" id="lockScreen" hidden>
+  <form class="lock-box" id="lockForm" autocomplete="off">
+    <img src="assets/icon.svg" alt="" width="72" height="72">
+    <h2>مخزن الإخلاص</h2>
+    <p>اكتب الرمز السري عشان تفتح</p>
+    <input type="password" inputmode="numeric" id="lockPin" class="input lock-pin" maxlength="12" aria-label="الرمز السري" autocomplete="current-password">
+    <button class="btn btn-primary btn-block btn-lg" type="submit">فتح</button>
+    <p class="hint" id="lockErr"></p>
+  </form>
+</div>
+
 <!-- ══════════ نافذة الإعدادات ══════════ -->
 <dialog class="sheet" id="settingsDlg">
   <div class="sheet-body">
@@ -402,6 +489,16 @@
     <div class="sheet-section">
       <h4><svg class="i i-sm"><use href="#i-cloud"/></svg>المزامنة بين الأجهزة</h4>
       <div id="cloudBox"></div>
+    </div>
+
+    <div class="sheet-section">
+      <h4><svg class="i i-sm"><use href="#i-users"/></svg>الجهاز ده</h4>
+      <div class="field"><label for="setUser">اسمك — بيتسجل مع كل حركة عشان تعرف مين عمل إيه</label><input type="text" class="input" id="setUser" maxlength="40" placeholder="مثال: يوسف"></div>
+    </div>
+
+    <div class="sheet-section">
+      <h4><svg class="i i-sm"><use href="#i-shield"/></svg>قفل التطبيق برمز سري</h4>
+      <div id="pinBox"></div>
     </div>
 
     <div class="sheet-section">
