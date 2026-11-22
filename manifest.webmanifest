@@ -8,14 +8,39 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0f1726",
-  "theme_color": "#0f1726",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
   "icons": [
-    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "assets/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "المخزن", "url": "warehouse.html" },
-    { "name": "الحاسبة", "url": "calculator.html" }
+    {
+      "name": "حركة جديدة",
+      "url": "warehouse.html#move"
+    },
+    {
+      "name": "سجل الحركات",
+      "url": "warehouse.html#log"
+    },
+    {
+      "name": "الحاسبة",
+      "url": "calculator.html"
+    }
+  ],
+  "id": "./",
+  "categories": [
+    "business",
+    "productivity"
   ]
 }

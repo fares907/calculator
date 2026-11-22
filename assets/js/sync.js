@@ -1,226 +1,196 @@
 /* ==========================================================================
-   sync.js — المزامنة بين الأجهزة
+   sync.js — المزامنة بين الأجهزة (الإصدار 2 — مؤمّن)
    --------------------------------------------------------------------------
-   إزاي بتشتغل:
-     • البرنامج بيشتغل أوفلاين على طول (IndexedDB). المزامنة إضافة فوقه.
-     • كل حركة جديدة بتتعلّم dirty=1 → بتترفع أول ما يبقى فيه نت.
-     • كل شوية بينزّل اللي اتغيّر عند الشريك ويدمجه.
-     • لو النت قطع: الشغل بيكمل عادي، ويتزامن لوحده لما يرجع.
-
-   الأمان:
-     الوصول للبيانات محتاج "رمز الربط" — سلسلة سرية فيها عنوان قاعدة
-     البيانات ومفتاحها ورقم الغرفة. من غير الرمز ده اللينك لوحده مبيوصّلش
-     لأي بيانات. متبعتش الرمز لحد بره الشركة.
+   الإصدار القديم كان بيقرا ويكتب في الجدول مباشرة، وسياسة قاعدة البيانات
+   كانت "using (true)" — يعني أي حد معاه المفتاح العام (وهو مكتوب في رمز
+   الربط) يقدر يقرا ويمسح بيانات **كل** الغرف. ده اتقفل:
+     • الجدول نفسه بقى مقفول تماماً على المفتاح العام.
+     • الوصول بقى عن طريق دالتين بس (binaa_pull / binaa_push) وكل دالة
+       بتشتغل على غرفة واحدة لازم تعرف رقمها السري (128 بت).
+     • مستحيل غرفة تكتب فوق حركة غرفة تانية.
+   لازم تشغّل supabase-setup.sql الجديد مرة واحدة عشان ده يشتغل.
    ========================================================================== */
 (function (global) {
   'use strict';
 
-  var CFG_KEY  = 'binaa_cloud_cfg';
-  var CUR_KEY  = 'binaa_sync_cursor';
-  var DEV_KEY  = 'binaa_device_id';
+  const CFG_KEY = 'binaa_cloud_cfg';
+  const CUR_KEY = 'binaa_sync_cursor';
+  const DEV_KEY = 'binaa_device_id';
+  const LAST_KEY = 'binaa_last_sync';
 
-  var POLL_MS = 8000;          // ينزّل تغييرات الشريك كل 8 ثواني
-  var PAGE = 500;              // عدد السجلات في الدفعة الواحدة
+  const POLL_MS = 8000;
+  const PAGE = 500;
 
-  var cfg = null;
-  var timer = null;
-  var running = false;
-  var listeners = [];
-  var lastError = '';
+  let cfg = null;
+  let timer = null;
+  let running = false;
+  const listeners = [];
+  let lastError = '';
 
-  /* ---------- معرّف الجهاز ---------- */
+  const ls = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+
   function deviceId() {
-    var d = localStorage.getItem(DEV_KEY);
-    if (!d) { d = App.uid().slice(0, 8); localStorage.setItem(DEV_KEY, d); }
+    let d = ls.get(DEV_KEY);
+    if (!d) { d = App.uid().slice(0, 8); ls.set(DEV_KEY, d); }
     return d;
   }
 
   /* ---------- الإعدادات ---------- */
+  function validCfg(c) {
+    return !!(c && /^https:\/\/[a-z0-9.-]+$/i.test(c.url || '') && typeof c.key === 'string' && c.key.length > 20 &&
+              /^[A-Za-z0-9]{20,64}$/.test(c.room || ''));
+  }
   function loadCfg() {
     if (cfg !== null) return cfg;
-    try {
-      var raw = localStorage.getItem(CFG_KEY);
-      cfg = raw ? JSON.parse(raw) : null;
-    } catch (e) { cfg = null; }
+    try { cfg = JSON.parse(ls.get(CFG_KEY) || 'null'); } catch (e) { cfg = null; }
+    if (cfg && !validCfg(cfg)) cfg = null;
     return cfg;
   }
   function saveCfg(c) {
     cfg = c;
-    if (c) localStorage.setItem(CFG_KEY, JSON.stringify(c));
-    else localStorage.removeItem(CFG_KEY);
+    if (c) ls.set(CFG_KEY, JSON.stringify(c)); else ls.del(CFG_KEY);
     emit();
   }
-  function isOn() { var c = loadCfg(); return !!(c && c.url && c.key && c.room); }
+  const isOn = () => !!loadCfg();
 
   /* ---------- رمز الربط ---------- */
   function encodeCode(c) {
-    var json = JSON.stringify({ u: c.url, k: c.key, r: c.room });
-    var b64 = btoa(unescape(encodeURIComponent(json)));
+    const json = JSON.stringify({ u: c.url, k: c.key, r: c.room });
+    const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(json)));
     return 'BINAA-' + b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
   function decodeCode(code) {
     try {
-      var s = String(code).trim().replace(/^BINAA-/i, '').replace(/\s+/g, '');
-      s = s.replace(/-/g, '+').replace(/_/g, '/');
+      let s = String(code).trim().replace(/^BINAA-/i, '').replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
       while (s.length % 4) s += '=';
-      var o = JSON.parse(decodeURIComponent(escape(atob(s))));
-      if (!o.u || !o.k || !o.r) return null;
-      return { url: String(o.u).replace(/\/+$/, ''), key: o.k, room: o.r };
+      const bytes = Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
+      const o = JSON.parse(new TextDecoder().decode(bytes));
+      const c = { url: String(o.u || '').replace(/\/+$/, ''), key: String(o.k || ''), room: String(o.r || '') };
+      return validCfg(c) ? c : null;
     } catch (e) { return null; }
   }
-  function newRoom() { return App.uid().replace(/-/g, '').slice(0, 20); }
-
-  /* ---------- تحويل بين شكل البيانات المحلي وشكل قاعدة البيانات ---------- */
-  function toRow(m, room) {
-    return {
-      id: m.id, room: room,
-      type: m.type, mat: m.mat,
-      qty_ton: m.qtyTon, unit_price: m.unitPrice, value: m.value,
-      note: m.note || '', party: m.party || '', ref: m.ref || '',
-      ts: m.ts, updated_at: m.updatedAt, del: m.del ? 1 : 0
-    };
-  }
-  function fromRow(r) {
-    return {
-      id: r.id, type: r.type, mat: r.mat,
-      qtyTon: Number(r.qty_ton) || 0,
-      unitPrice: Number(r.unit_price) || 0,
-      value: Number(r.value) || 0,
-      note: r.note || '', party: r.party || '', ref: r.ref || '',
-      ts: Number(r.ts) || 0,
-      updatedAt: Number(r.updated_at) || 0,
-      del: r.del ? 1 : 0,
-      dirty: 0
-    };
+  /* رقم غرفة جديد: 32 حرف عشوائي (128 بت) — مستحيل تخمينه */
+  function newRoom() {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
   }
 
-  /* ---------- نداء الشبكة ---------- */
-  function api(path, opts) {
-    var c = loadCfg();
-    if (!c) return Promise.reject(new Error('مفيش إعدادات سحابة'));
-    opts = opts || {};
-    var headers = {
-      'apikey': c.key,
-      'Authorization': 'Bearer ' + c.key,
-      'Content-Type': 'application/json'
-    };
-    for (var h in (opts.headers || {})) headers[h] = opts.headers[h];
+  /* ---------- تحويل الشكل ---------- */
+  const toRow = (m) => ({
+    id: m.id, type: m.type, mat: m.mat, item: m.item || m.mat,
+    qty_ton: m.qtyTon, unit_price: m.unitPrice, value: m.value,
+    note: m.note || '', party: m.party || '', ref: m.ref || '',
+    ts: m.ts, updated_at: m.updatedAt, del: m.del ? 1 : 0
+  });
+  const fromRow = (r) => ({
+    id: r.id, type: r.type, mat: r.mat, item: r.item || r.mat,
+    qtyTon: Number(r.qty_ton) || 0, unitPrice: Number(r.unit_price) || 0, value: Number(r.value) || 0,
+    note: r.note || '', party: r.party || '', ref: r.ref || '',
+    ts: Number(r.ts) || 0, updatedAt: Number(r.updated_at) || 0, del: r.del ? 1 : 0
+  });
 
-    var ctrl = null, timeoutId = null;
-    if (global.AbortController) {
-      ctrl = new AbortController();
-      timeoutId = setTimeout(function () { ctrl.abort(); }, 20000);
-    }
-
-    return fetch(c.url + '/rest/v1/' + path, {
-      method: opts.method || 'GET',
-      headers: headers,
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-      signal: ctrl ? ctrl.signal : undefined
-    }).then(function (res) {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (!res.ok) {
-        return res.text().then(function (t) {
-          throw new Error('HTTP ' + res.status + ': ' + (t || '').slice(0, 200));
-        });
-      }
-      var ct = res.headers.get('content-type') || '';
-      return ct.indexOf('application/json') > -1 ? res.json() : null;
-    }, function (err) {
-      if (timeoutId) clearTimeout(timeoutId);
-      throw err;
-    });
-  }
-
-  /* ---------- رفع اللي اتعمل محلياً ---------- */
-  function push() {
-    var c = loadCfg();
-    return Store.getDirty(PAGE).then(function (dirty) {
-      if (!dirty.length) return 0;
-      var rows = dirty.map(function (m) { return toRow(m, c.room); });
-      return api('moves?on_conflict=id', {
+  /* ---------- نداء دالة على السيرفر ---------- */
+  async function rpc(fn, body, c) {
+    c = c || loadCfg();
+    if (!c) throw new Error('مفيش إعدادات سحابة');
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const res = await fetch(c.url + '/rest/v1/rpc/' + fn, {
         method: 'POST',
-        body: rows,
-        headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
-      }).then(function () {
-        return Store.markClean(dirty.map(function (m) { return m.id; }));
-      }).then(function () { return dirty.length; });
-    });
-  }
-
-  /* ---------- تنزيل اللي عمله الشريك ---------- */
-  function pull() {
-    var c = loadCfg();
-    var cursor = parseInt(localStorage.getItem(CUR_KEY) || '0', 10) || 0;
-
-    var q = 'moves?room=eq.' + encodeURIComponent(c.room) +
-            '&updated_at=gt.' + cursor +
-            '&order=updated_at.asc&limit=' + PAGE;
-
-    return api(q).then(function (rows) {
-      if (!rows || !rows.length) return 0;
-      var moves = rows.map(fromRow);
-      var maxTs = cursor;
-      moves.forEach(function (m) { if (m.updatedAt > maxTs) maxTs = m.updatedAt; });
-
-      return Store.bulkPut(moves, true).then(function () {
-        localStorage.setItem(CUR_KEY, String(maxTs));
-        // الرصيد بيتعاد حسابه بعد أي دمج عشان يفضل مظبوط
-        return Store.recomputeBalance();
-      }).then(function () {
-        // لو الدفعة كاملة يبقى فيه كمان — كمّل
-        if (rows.length === PAGE) return pull().then(function (more) { return moves.length + more; });
-        return moves.length;
+        headers: { apikey: c.key, Authorization: 'Bearer ' + c.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer'
       });
-    });
-  }
-
-  /* ---------- دورة مزامنة كاملة ---------- */
-  function syncNow(silent) {
-    if (!isOn()) return Promise.resolve({ skipped: true });
-    if (running) return Promise.resolve({ busy: true });
-    if (global.navigator && navigator.onLine === false) {
-      lastError = 'مفيش اتصال بالإنترنت';
-      emit(); return Promise.resolve({ offline: true });
-    }
-
-    running = true; lastError = ''; emit();
-
-    return push()
-      .then(function (up) {
-        return pull().then(function (down) { return { up: up, down: down }; });
-      })
-      .then(function (r) {
-        running = false;
-        localStorage.setItem('binaa_last_sync', String(Date.now()));
-        emit();
-        if (!silent && (r.up || r.down)) {
-          var parts = [];
-          if (r.up) parts.push('رفع ' + r.up);
-          if (r.down) parts.push('نزّل ' + r.down);
-          App.toast('تمت المزامنة ✓ ' + parts.join(' · '));
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        if (res.status === 404 || /PGRST202|Could not find the function/i.test(t)) {
+          throw new Error('قاعدة البيانات محتاجة تحديث — شغّل ملف supabase-setup.sql الجديد');
         }
-        return r;
-      })
-      .catch(function (err) {
-        running = false;
-        lastError = err && err.message ? err.message : 'فشلت المزامنة';
-        emit();
-        if (!silent) App.toast('فشلت المزامنة: ' + lastError, 'err', 4200);
-        return { error: lastError };
-      });
+        throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 160));
+      }
+      const ct = res.headers.get('content-type') || '';
+      return ct.includes('json') ? res.json() : null;
+    } finally { clearTimeout(to); }
   }
 
-  /* ---------- التشغيل الدوري ---------- */
-  function start() {
-    stop();
-    if (!isOn()) { emit(); return; }
-    syncNow(true);
-    timer = setInterval(function () {
-      if (document.hidden) return;       // مانستهلكش بطارية والصفحة مقفولة
-      syncNow(true);
-    }, POLL_MS);
+  /* ---------- رفع ---------- */
+  async function push() {
+    const c = loadCfg();
+    let total = 0;
+    for (let round = 0; round < 40; round++) {
+      const dirty = await Store.getDirty(PAGE);
+      if (!dirty.length) break;
+      await rpc('binaa_push', { p_room: c.room, p_rows: dirty.map(toRow) });
+      await Store.markClean(dirty);
+      total += dirty.length;
+      if (dirty.length < PAGE) break;
+    }
+    return total;
+  }
 
+  /* ---------- تنزيل ---------- */
+  async function pull() {
+    const c = loadCfg();
+    let got = 0;
+    for (let round = 0; round < 200; round++) {
+      const cursor = parseInt(ls.get(CUR_KEY) || '0', 10) || 0;
+      const rows = await rpc('binaa_pull', { p_room: c.room, p_since: cursor, p_limit: PAGE });
+      if (!rows || !rows.length) break;
+      const moves = rows.map(fromRow);
+      await Store.bulkPut(moves, true);
+      const maxTs = moves.reduce((a, m) => Math.max(a, m.updatedAt), cursor);
+      ls.set(CUR_KEY, String(maxTs));
+      got += moves.length;
+      if (rows.length < PAGE) break;
+    }
+    if (got) await Store.recomputeBalance();
+    return got;
+  }
+
+  async function syncNow(silent) {
+    if (!isOn()) return { skipped: true };
+    if (running) return { busy: true };
+    if (navigator.onLine === false) { lastError = 'مفيش اتصال بالإنترنت'; emit(); return { offline: true }; }
+    running = true; lastError = ''; emit();
+    try {
+      const up = await push();
+      const down = await pull();
+      ls.set(LAST_KEY, String(Date.now()));
+      if (!silent && (up || down)) {
+        const parts = [];
+        if (up) parts.push('رفع ' + up);
+        if (down) parts.push('نزّل ' + down);
+        App.toast('تمت المزامنة ✓ ' + parts.join(' · '), 'ok');
+      }
+      return { up, down };
+    } catch (err) {
+      lastError = err && err.name === 'AbortError' ? 'الاتصال اتأخر' : (err && err.message) || 'فشلت المزامنة';
+      if (!silent) App.toast('فشلت المزامنة: ' + lastError, 'err', 4800);
+      return { error: lastError };
+    } finally {
+      running = false; emit();
+    }
+  }
+
+  function onVisible() { if (!document.hidden) syncNow(true).then(notify); }
+  function onOnline() { syncNow(true).then(notify); }
+  let changeCb = null;
+  function notify(r) { if (r && r.down && changeCb) changeCb(r); }
+
+  function start(onRemoteChange) {
+    stop();
+    if (onRemoteChange) changeCb = onRemoteChange;
+    if (!isOn()) { emit(); return; }
+    syncNow(true).then(notify);
+    timer = setInterval(() => { if (!document.hidden) syncNow(true).then(notify); }, POLL_MS);
     document.addEventListener('visibilitychange', onVisible);
     global.addEventListener('online', onOnline);
   }
@@ -229,38 +199,28 @@
     document.removeEventListener('visibilitychange', onVisible);
     global.removeEventListener('online', onOnline);
   }
-  function onVisible() { if (!document.hidden) syncNow(true); }
-  function onOnline() { syncNow(true); }
 
-  /* ---------- اختبار الاتصال ---------- */
-  function test(c) {
-    var old = cfg;
-    cfg = c;
-    return api('moves?limit=1&select=id')
-      .then(function () { cfg = old; return { ok: true }; })
-      .catch(function (e) { cfg = old; return { ok: false, error: e.message }; });
+  async function test(c) {
+    try {
+      await rpc('binaa_pull', { p_room: c.room, p_since: Number.MAX_SAFE_INTEGER, p_limit: 1 }, c);
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.message }; }
   }
 
-  /* ---------- الحالة ---------- */
   function status() {
-    var last = parseInt(localStorage.getItem('binaa_last_sync') || '0', 10);
     return {
-      on: isOn(),
-      busy: running,
-      error: lastError,
-      lastSync: last || 0,
-      device: deviceId(),
-      room: isOn() ? loadCfg().room : ''
+      on: isOn(), busy: running, error: lastError,
+      lastSync: parseInt(ls.get(LAST_KEY) || '0', 10) || 0,
+      device: deviceId(), room: isOn() ? loadCfg().room : ''
     };
   }
   function onChange(fn) { listeners.push(fn); fn(status()); }
-  function emit() { var s = status(); listeners.forEach(function (f) { try { f(s); } catch (e) {} }); }
+  function emit() { const s = status(); listeners.forEach((f) => { try { f(s); } catch (e) {} }); }
+
+  function resetCursor() { ls.del(CUR_KEY); }
 
   global.Sync = {
-    isOn: isOn, cfg: loadCfg, saveCfg: saveCfg,
-    encodeCode: encodeCode, decodeCode: decodeCode, newRoom: newRoom,
-    syncNow: syncNow, start: start, stop: stop, test: test,
-    status: status, onChange: onChange,
-    deviceId: deviceId
+    isOn, cfg: loadCfg, saveCfg, encodeCode, decodeCode, newRoom,
+    syncNow, start, stop, test, status, onChange, deviceId, resetCursor
   };
 })(window);
