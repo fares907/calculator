@@ -458,6 +458,16 @@
   </form>
 </dialog>
 
+<!-- ══════════ مسح QR بالكاميرا ══════════ -->
+<dialog class="sheet" id="scanDlg">
+  <div class="sheet-body">
+    <div class="sheet-grip"></div>
+    <div class="sheet-head"><h3 class="sheet-title">امسح كود الربط</h3><button class="btn btn-ghost btn-icon btn-sm" type="button" data-close aria-label="قفل"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="scan-box"><video id="scanVideo" playsinline muted></video><span class="scan-frame"></span></div>
+    <p class="hint mt-3" id="scanHint" style="text-align:center">وجّه الكاميرا على الكود اللي ظاهر على الموبايل التاني</p>
+  </div>
+</dialog>
+
 <!-- ══════════ قفل التطبيق ══════════ -->
 <div class="lock" id="lockScreen" hidden>
   <form class="lock-box" id="lockForm" autocomplete="off">
@@ -477,6 +487,11 @@
     <div class="sheet-head"><h3 class="sheet-title">الإعدادات</h3><button class="btn btn-ghost btn-icon btn-sm" data-close aria-label="قفل" type="button"><svg class="i"><use href="#i-x"/></svg></button></div>
 
     <div class="sheet-section" style="margin-top:0">
+      <h4><svg class="i i-sm"><use href="#i-cloud"/></svg>المزامنة بين الأجهزة</h4>
+      <div id="cloudBox"></div>
+    </div>
+
+    <div class="sheet-section">
       <h4><svg class="i i-sm"><use href="#i-warehouse"/></svg>سعة المخزن وحدود التنبيه (إجمالي المادة)</h4>
       <div class="grid-2">
         <div class="field"><label for="setSteelCap">سعة الحديد</label><div class="input-wrap"><input type="number" id="setSteelCap" inputmode="decimal" min="0" step="any"><span class="unit">طن</span></div></div>
@@ -484,11 +499,6 @@
         <div class="field"><label for="setSteelLow">نبّهني لو الحديد أقل من</label><div class="input-wrap"><input type="number" id="setSteelLow" inputmode="decimal" min="0" step="any"><span class="unit">طن</span></div></div>
         <div class="field"><label for="setCementLow">نبّهني لو الأسمنت أقل من</label><div class="input-wrap"><input type="number" id="setCementLow" inputmode="decimal" min="0" step="any"><span class="unit">طن</span></div></div>
       </div>
-    </div>
-
-    <div class="sheet-section">
-      <h4><svg class="i i-sm"><use href="#i-cloud"/></svg>المزامنة بين الأجهزة</h4>
-      <div id="cloudBox"></div>
     </div>
 
     <div class="sheet-section">
@@ -529,6 +539,7 @@
 </dialog>
 
 <script src="assets/js/store.js"></script>
+<script src="assets/vendor/qrcode-2.0.4.js"></script>
 <script src="assets/js/sync.js"></script>
 <script src="assets/js/report.js"></script>
 <script src="assets/js/warehouse.js"></script>

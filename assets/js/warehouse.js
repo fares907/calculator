@@ -196,6 +196,7 @@
       if (q) { setType(q.dataset.quick); go('move'); }
     });
     window.addEventListener('hashchange', () => {
+      if (location.hash.startsWith('#pair=')) { handlePairHash(location.hash); return; }
       const v = location.hash.slice(1);
       if (VIEWS.includes(v) && v !== state.view) go(v);
     });
@@ -803,10 +804,16 @@
     const box = $('#cloudBox');
     const st = Sync.status();
     if (!st.on) {
+      const canScan = 'BarcodeDetector' in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
       box.innerHTML = `
-        <div class="alert mb-3">${icon('cloud')}<div>المزامنة مقفولة — البيانات على الجهاز ده بس.<br>فعّلها عشان الشريك يشوف نفس الأرقام لحظة بلحظة.</div></div>
-        <button class="btn btn-primary btn-block btn-lg" id="btnCloudOn" type="button">${icon('cloud')}تفعيل المزامنة (أول جهاز)</button>
-        <div class="field mt-4"><label for="pairIn">الجهاز التاني؟ الصق رمز الربط اللي جالك</label>
+        <div class="pair-choose">
+          <button class="pair-opt" id="btnCloudOn" type="button">
+            <span class="kpi-ic">${icon('cloud')}</span><b>ده أول جهاز</b><span>فعّل المزامنة — هيظهر لك كود تربط بيه باقي الأجهزة</span></button>
+          <button class="pair-opt" id="btnScan" type="button" ${canScan ? '' : 'hidden'}>
+            <span class="kpi-ic steel">${icon('eye')}</span><b>عندي جهاز متفعّل</b><span>امسح الكود اللي ظاهر عليه بالكاميرا</span></button>
+        </div>
+        <div class="alert mt-4">${icon('link')}<div><b>أسهل طريقة للجهاز التاني:</b> افتح كاميرا الموبايل العادية ووجّهها على الكود اللي على الجهاز الأول — هيفتح الموقع ويتربط لوحده.</div></div>
+        <div class="field mt-4"><label for="pairIn">أو الصق رمز / لينك الربط</label>
           <div class="row"><input type="text" class="input grow" id="pairIn" placeholder="IKH-…" dir="ltr" autocomplete="off" spellcheck="false" style="width:auto">
           <button class="btn btn-ghost" id="btnPair" type="button">${icon('link')}ربط</button></div></div>
         <details class="mt-4"><summary class="t-muted" style="cursor:pointer;font-size:.84rem">متقدم: سحابة Supabase خاصة بيك</summary>
@@ -815,9 +822,10 @@
           <button class="btn btn-ghost btn-block mt-3" id="btnConnect" type="button">تفعيل على السحابة دي</button>
           <p class="hint mt-3">لازم تشغّل ملف <b>supabase-setup.sql</b> على مشروعك الأول.</p>
         </details>`;
+      $('#btnScan').addEventListener('click', startScan);
       $('#btnCloudOn').addEventListener('click', () => connectWith({ ...Sync.DEFAULT_CLOUD, room: Sync.newRoom() }));
       $('#btnPair').addEventListener('click', () => {
-        const c = Sync.decodeCode($('#pairIn').value);
+        const c = Sync.decodeCode(extractCode($('#pairIn').value));
         if (!c) return App.toast('الرمز مش مظبوط', 'err');
         connectWith(c);
       });
@@ -831,19 +839,34 @@
       return;
     }
     const code = Sync.encodeCode(Sync.cfg());
+    const link = pairLink(code);
     box.innerHTML = `
-      <div class="alert alert-ok mb-3">${icon('cloud')}<div><strong>المزامنة شغالة</strong><br>آخر مزامنة: ${esc(st.lastSync ? App.relTime(st.lastSync) : 'لسه')}${st.error ? `<br><span class="t-out">${esc(st.error)}</span>` : ''}</div></div>
-      <div class="field mb-3"><label for="pairOut">رمز الربط — ابعته للشريك</label>
-        <textarea class="input" id="pairOut" rows="${st.isDefault ? 1 : 3}" readonly dir="ltr" style="font-size:12px;word-break:break-all;text-align:left">${esc(code)}</textarea>
-        <span class="hint">⚠️ الرمز ده مفتاح البيانات — ابعته للشريك بس، ومتنشروش.</span></div>
-      <div class="grid-2">
+      <div class="alert alert-ok mb-3">${icon('cloud')}<div><strong>المزامنة شغالة</strong> · آخر مزامنة: ${esc(st.lastSync ? App.relTime(st.lastSync) : 'لسه')}${st.error ? `<br><span class="t-out">${esc(st.error)}</span>` : ''}</div></div>
+      <div class="pair-card">
+        <div class="pair-qr" id="pairQr" role="img" aria-label="كود QR لربط جهاز جديد">${qrSvg(link)}</div>
+        <ol class="pair-steps">
+          <li>افتح <b>كاميرا</b> الموبايل التاني</li>
+          <li>وجّهها على الكود ده واضغط على اللينك اللي يظهر</li>
+          <li>اضغط <b>"اربط"</b> — والمخزن يبقى واحد على الجهازين</li>
+        </ol>
+      </div>
+      <div class="grid-2 mt-4">
+        <button class="btn btn-primary" id="btnShareLink" type="button">${icon('link')}ابعت لينك الربط</button>
         <button class="btn btn-ghost" id="btnCopyCode" type="button">${icon('copy')}نسخ الرمز</button>
         <button class="btn btn-ghost" id="btnSyncNow" type="button">${icon('refresh')}زامن دلوقتي</button>
-        <button class="btn btn-danger-ghost btn-sm span-all" id="btnUnlink" type="button">فصل الجهاز عن السحابة</button>
-      </div>`;
+        <button class="btn btn-danger-ghost" id="btnUnlink" type="button">فصل الجهاز</button>
+      </div>
+      <details class="mt-3"><summary class="t-muted" style="cursor:pointer;font-size:.82rem">الرمز المكتوب</summary>
+        <input class="input mt-2" id="pairOut" readonly dir="ltr" value="${esc(code)}" style="font-size:13px"></details>
+      <p class="hint mt-3">⚠️ الكود واللينك = مفتاح بيانات المخزن. ابعتهم لشريكك بس.${/^(localhost|127\.|\[)/.test(location.hostname) ? '<br>ملحوظة: انت فاتح الموقع من localhost — اللينك هيشتغل على الموبايل التاني لما الموقع يترفع على النت أو تفتحه بعنوان الشبكة.' : ''}</p>`;
     $('#btnCopyCode').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(code); App.toast('اتنسخ الرمز ✓', 'ok'); }
-      catch (e) { $('#pairOut').select(); App.toast('حدد الرمز وانسخه يدوي', 'warn'); }
+      catch (e) { $('#pairOut').closest('details').open = true; $('#pairOut').select(); App.toast('حدد الرمز وانسخه يدوي', 'warn'); }
+    });
+    $('#btnShareLink').addEventListener('click', async () => {
+      const text = 'لينك ربط مخزن الإخلاص — افتحه من الموبايل التاني:';
+      if (navigator.share) { try { await navigator.share({ title: 'ربط مخزن الإخلاص', text, url: link }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+      window.open('https://wa.me/?text=' + encodeURIComponent(text + '\n' + link), '_blank', 'noopener');
     });
     $('#btnSyncNow').addEventListener('click', async () => { await Sync.syncNow(false); await refreshAll(); renderCloudBox(); });
     $('#btnUnlink').addEventListener('click', async () => {
@@ -852,6 +875,73 @@
       Sync.stop(); Sync.saveCfg(null); Sync.resetCursor();
       renderCloudBox(); App.toast('اتفصلت المزامنة', 'ok');
     });
+  }
+
+  /* ---------- الربط بـ QR ولينك ---------- */
+  function pairLink(code) {
+    const u = new URL('warehouse.html', location.href);
+    u.search = ''; u.hash = 'pair=' + code;
+    return u.href;
+  }
+  function extractCode(text) {
+    const t = String(text || '').trim();
+    const m = /#pair=([A-Za-z0-9_\-]+)/.exec(t);
+    return m ? m[1] : t;
+  }
+  function qrSvg(text) {
+    const qr = qrcode(0, 'M');
+    qr.addData(text);
+    qr.make();
+    const n = qr.getModuleCount(), q = 2;
+    let d = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + q} ${r + q}h1v1h-1z`;
+    return `<svg viewBox="0 0 ${n + q * 2} ${n + q * 2}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#0b1220"/></svg>`;
+  }
+  /* لينك الربط اللي اتفتح من الكاميرا: بنسأل الأول دايماً —
+     عشان محدش يبعت لك لينك يحوّل جهازك على مخزن تاني من غير ما تاخد بالك */
+  async function handlePairHash(hash) {
+    const m = /^#pair=([A-Za-z0-9_\-]+)$/.exec(hash || location.hash);
+    if (!m) return false;
+    history.replaceState(null, '', location.pathname + '#' + state.view);
+    const c = Sync.decodeCode(m[1]);
+    if (!c) { App.toast('لينك الربط مش صحيح', 'err'); return true; }
+    const already = Sync.isOn();
+    if (already && Sync.cfg().room === c.room) { App.toast('الجهاز ده مربوط بالفعل ✓', 'ok'); return true; }
+    const ok = await App.confirm(already
+      ? 'الجهاز ده مربوط بمخزن تاني. لو كمّلت، هيتربط بالمخزن الجديد ده بدل القديم. اتأكد إن اللينك جاي من شريكك.'
+      : 'الجهاز ده هيتربط بمخزن الإخلاص وهيشوف نفس الحركات والأرصدة اللي على الجهاز التاني. اتأكد إن اللينك جاي من شريكك.',
+      { title: 'ربط الجهاز ده؟', okText: 'اربط', danger: already });
+    if (ok) connectWith(c);
+    return true;
+  }
+  let scanStream = null, scanTimer = null;
+  async function startScan() {
+    const dlg = App.wireSheet($('#scanDlg'));
+    if (!dlg._scanWired) { dlg._scanWired = true; dlg.addEventListener('close', stopScan); }
+    $('#settingsDlg').close();
+    dlg.showModal();
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      const v = $('#scanVideo'); v.srcObject = scanStream; await v.play();
+      const det = new BarcodeDetector({ formats: ['qr_code'] });
+      scanTimer = setInterval(async () => {
+        try {
+          const codes = await det.detect(v);
+          if (!codes.length) return;
+          const c = Sync.decodeCode(extractCode(codes[0].rawValue));
+          if (!c) { $('#scanHint').textContent = 'ده مش كود ربط المخزن'; return; }
+          dlg.close();
+          connectWith(c);
+        } catch (e) {}
+      }, 300);
+    } catch (e) {
+      $('#scanHint').textContent = 'مقدرتش أفتح الكاميرا — اسمح بالكاميرا أو افتح كاميرا الموبايل العادية ووجّهها على الكود';
+    }
+  }
+  function stopScan() {
+    clearInterval(scanTimer); scanTimer = null;
+    if (scanStream) scanStream.getTracks().forEach((t) => t.stop());
+    scanStream = null;
   }
 
   async function connectWith(c) {
@@ -1280,8 +1370,10 @@
       setMat('steel'); setType('out'); setPay('cash');
       refreshPartyList(); updateCount();
 
-      const start = location.hash.slice(1);
+      const startHash = location.hash;
+      const start = startHash.slice(1);
       go(VIEWS.includes(start) ? start : 'dash');
+      if (startHash.startsWith('#pair=')) setTimeout(() => handlePairHash(startHash), 400);
 
       if (Sync.isOn()) Sync.start(refreshAll);
     } catch (err) {
