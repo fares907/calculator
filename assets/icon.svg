@@ -1,18 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Al Ikhlas">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1e2a45"/>
-      <stop offset="1" stop-color="#0f1726"/>
-    </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#e8c98e"/>
-      <stop offset="1" stop-color="#a8873e"/>
-    </linearGradient>
+    <linearGradient id="t" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#163257"/><stop offset="1" stop-color="#081325"/></linearGradient>
+    <linearGradient id="a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC857"/><stop offset="1" stop-color="#F08A24"/></linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <!-- صندوق مخزن -->
-  <path d="M256 96 424 176v56L256 152 88 232v-56z" fill="url(#gold)"/>
-  <rect x="120" y="248" width="272" height="168" rx="16" fill="none" stroke="url(#gold)" stroke-width="22"/>
-  <path d="M120 316h272" stroke="url(#gold)" stroke-width="18" stroke-linecap="round"/>
-  <circle cx="256" cy="366" r="24" fill="url(#gold)"/>
+  <rect width="120" height="120" rx="28" fill="url(#t)"/>
+  <path d="M120 28v-0c0-15.5-12.5-28-28-28H70L0 70v22c0 15.5 12.5 28 28 28h0z" fill="#fff" fill-opacity=".035"/>
+  <!-- I-beam: الألف في "الإخلاص" والـ I في "Ikhlas" -->
+  <path fill="url(#a)" d="M32 26h56a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H68v36h20a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H32a4 4 0 0 1-4-4v-8a4 4 0 0 1 4-4h20V42H32a4 4 0 0 1-4-4v-8a4 4 0 0 1 4-4z"/>
+  <path fill="url(#s)" d="M32 26h56a4 4 0 0 1 4 4v3H28v-3a4 4 0 0 1 4-4z"/>
 </svg>

@@ -1,143 +1,103 @@
 /* ==========================================================================
-   calculator.js — منطق صفحة الحاسبة
+   calculator.js — الحاسبة (حساب لحظي وانت بتكتب)
    ========================================================================== */
 (function () {
   'use strict';
 
-  var $ = App.$, N = App.toNum, R3 = App.round3;
-  var KG = 1000, BAGS = 20;
+  const { $, $$ } = App;
+  const N = App.toNum, R3 = App.round3;
+  const KG = 1000, BAGS = 20;
+  const SAVE_KEY = 'binaa_calc_inputs';
 
-  /* ---------- ربط خانتين ببعض (طن ↔ وحدة فرعية) ---------- */
-  function link(aSel, bSel, factor, after) {
-    var a = $(aSel), b = $(bSel);
-    a.addEventListener('input', function () {
-      b.value = a.value === '' ? '' : R3(N(a.value) * factor);
-      if (after) after();
-    });
-    b.addEventListener('input', function () {
-      a.value = b.value === '' ? '' : R3(N(b.value) / factor);
-      if (after) after();
-    });
+  /* ربط خانتين (طن ↔ وحدة فرعية) */
+  function link(a, b, factor) {
+    $(a).addEventListener('input', () => { $(b).value = $(a).value === '' ? '' : R3(N($(a).value) * factor); update(); });
+    $(b).addEventListener('input', () => { $(a).value = $(b).value === '' ? '' : R3(N($(b).value) / factor); update(); });
   }
 
-  function prices() {
-    var st = N($('#steelPriceTon').value);
-    var bag = N($('#cementPriceBag').value);
-    return { steelTon: st, bag: bag, cementTon: bag * BAGS };
-  }
+  function update() {
+    const steelTon = N($('#steelPriceTon').value), bag = N($('#cementPriceBag').value), cementTon = bag * BAGS;
+    const sq = N($('#steelQtyTon').value), cq = N($('#cementQtyTon').value);
+    const su = N($('#steelUsedTon').value), cu = N($('#cementUsedTon').value);
+    const sr = Math.max(0, sq - su), cr = Math.max(0, cq - cu);
+    const srv = sr * steelTon, crv = cr * cementTon, suv = su * steelTon, cuv = cu * cementTon;
 
-  /* ---------- تحديث قيم المخزون فوراً ---------- */
-  function updateBadges() {
-    var p = prices();
-    $('#steelStockVal').textContent = App.fmt(N($('#steelQtyTon').value) * p.steelTon);
-    $('#cementStockVal').textContent = App.fmt(N($('#cementQtyTon').value) * p.cementTon);
-  }
-
-  /* ---------- الحساب ---------- */
-  function calculate() {
-    var p = prices();
-    var sq = N($('#steelQtyTon').value), cq = N($('#cementQtyTon').value);
-    var su = N($('#steelUsedTon').value), cu = N($('#cementUsedTon').value);
-
-    var sr = sq - su, cr = cq - cu;
-    var srf = Math.max(0, sr), crf = Math.max(0, cr);
-    var srv = srf * p.steelTon, crv = crf * p.cementTon;
-    var suv = su * p.steelTon, cuv = cu * p.cementTon;
-
-    /* تحذيرات */
-    var warns = [];
-    if (su > sq) warns.push('الحديد المصروف (' + App.fmtD(su) + ' طن) أكبر من المخزون (' + App.fmtD(sq) + ' طن)');
-    if (cu > cq) warns.push('الأسمنت المصروف (' + App.fmtD(cu) + ' طن) أكبر من المخزون (' + App.fmtD(cq) + ' طن)');
+    const warns = [];
+    if (su > sq) warns.push(`الحديد المصروف (${App.fmtD(su)} طن) أكبر من المتاح (${App.fmtD(sq)} طن)`);
+    if (cu > cq) warns.push(`الأسمنت المصروف (${App.fmtD(cu)} طن) أكبر من المتاح (${App.fmtD(cq)} طن)`);
     $('#warnHost').innerHTML = warns.length
-      ? '<div class="alert alert-warn"><span>⚠️</span><div>' + App.esc(warns.join(' — ')) + '</div></div>'
-      : '';
+      ? `<div class="alert alert-warn mb-4"><svg class="i"><use href="#i-alert"/></svg><div>${App.esc(warns.join(' — '))}</div></div>` : '';
 
-    /* المتبقي */
-    $('#rSteelTon').textContent = App.fmtD(srf) + ' طن';
-    $('#rSteelKg').textContent = '= ' + App.fmt(srf * KG) + ' كجم';
-    $('#rSteelFrom').textContent = 'من أصل ' + App.fmtD(sq) + ' طن';
+    App.countTo($('#rTotal'), srv + crv);
+    $('#rSteelVal').textContent = App.fmt(srv);
+    $('#rCementVal').textContent = App.fmt(crv);
+    App.countTo($('#rSteelTon'), sr, App.fmtD);
+    App.countTo($('#rCementTon'), cr, App.fmtD);
+    $('#rSteelKg').textContent = App.fmt(sr * KG);
+    $('#rCementBags').textContent = App.fmt(cr * BAGS);
+    $('#rSteelFrom').textContent = App.fmtD(sq);
+    $('#rCementFrom').textContent = App.fmtD(cq);
 
-    $('#rCementTon').textContent = App.fmtD(crf) + ' طن';
-    $('#rCementBags').textContent = '= ' + App.fmt(crf * BAGS) + ' شكارة';
-    $('#rCementFrom').textContent = 'من أصل ' + App.fmtD(cq) + ' طن';
+    const sp = sq > 0 ? Math.min(100, (sr / sq) * 100) : 0, cp = cq > 0 ? Math.min(100, (cr / cq) * 100) : 0;
+    $('#ringSteel').style.setProperty('--p', sp.toFixed(1));
+    $('#ringCement').style.setProperty('--p', cp.toFixed(1));
+    $('#pSteel').textContent = Math.round(sp) + '%';
+    $('#pCement').textContent = Math.round(cp) + '%';
 
-    /* النسب */
-    var sp = sq > 0 ? Math.min(100, Math.max(0, sr / sq * 100)) : 0;
-    var cp = cq > 0 ? Math.min(100, Math.max(0, cr / cq * 100)) : 0;
-    $('#pSteelPct').textContent = Math.round(sp) + '%';
-    $('#pCementPct').textContent = Math.round(cp) + '%';
-    $('#pSteelBar').style.width = sp + '%';
-    $('#pCementBar').style.width = cp + '%';
-
-    /* القيم */
-    $('#rSteelVal').textContent = App.fmt(srv) + ' ج';
-    $('#rSteelNote').textContent = App.fmtD(srf) + ' طن × ' + App.fmt(p.steelTon) + ' ج/طن';
-    $('#rCementVal').textContent = App.fmt(crv) + ' ج';
-    $('#rCementNote').textContent = App.fmt(crf * BAGS) + ' شكارة × ' + App.fmt(p.bag) + ' ج/شكارة';
-
-    $('#rTotal').textContent = App.fmt(srv + crv) + ' جنيه';
-    $('#rTotalSub').textContent = 'حديد: ' + App.fmt(srv) + ' + أسمنت: ' + App.fmt(crv);
-
-    $('#rSteelUsed').textContent = App.fmt(suv) + ' ج';
-    $('#rSteelUsedNote').textContent = App.fmtD(su) + ' طن × ' + App.fmt(p.steelTon) + ' ج/طن';
-    $('#rCementUsed').textContent = App.fmt(cuv) + ' ج';
-    $('#rCementUsedNote').textContent = App.fmt(cu * BAGS) + ' شكارة × ' + App.fmt(p.bag) + ' ج/شكارة';
-    $('#rTotalUsed').textContent = App.fmt(suv + cuv) + ' ج';
-
-    var res = $('#results');
-    res.hidden = false;
-    res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    App.countTo($('#rTotalUsed'), suv + cuv);
+    $('#rSteelUsed').textContent = App.fmt(suv);
+    $('#rCementUsed').textContent = App.fmt(cuv);
+    save();
   }
 
-  /* ---------- جيب الأسعار والرصيد من المخزن ---------- */
-  function pullFromWarehouse() {
-    App.toast('بجيب من المخزن…');
-    Store.ready()
-      .then(function () { return Promise.all([Store.getSettings(), Store.getBalance()]); })
-      .then(function (r) {
-        var s = r[0], b = r[1];
-
-        $('#steelPriceTon').value = s.steelPriceTon;
-        $('#steelPriceKg').value = R3(s.steelPriceTon / KG);
-        $('#cementPriceBag').value = s.cementBagPrice;
-        $('#cementPriceTon').value = R3(s.cementBagPrice * BAGS);
-
-        $('#steelQtyTon').value = b.steelTon;
-        $('#steelQtyKg').value = R3(b.steelTon * KG);
-        $('#cementQtyTon').value = b.cementTon;
-        $('#cementQtyBag').value = R3(b.cementTon * BAGS);
-
-        $('#steelUsedTon').value = 0; $('#steelUsedKg').value = 0;
-        $('#cementUsedTon').value = 0; $('#cementUsedBag').value = 0;
-
-        updateBadges();
-        App.toast('تم جلب الأسعار والرصيد من المخزن ✓');
-      })
-      .catch(function () { App.toast('مقدرتش أقرا بيانات المخزن', 'err'); });
+  /* الأرقام بتتحفظ عشان لما ترجع تلاقيها زي ما سبتها */
+  const save = App.debounce(() => {
+    const data = {};
+    $$('input[type=number]').forEach((el) => { data[el.id] = el.value; });
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) {}
+  }, 400);
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+      if (d) for (const [id, v] of Object.entries(d)) { const el = document.getElementById(id); if (el && el.type === 'number' && /^-?[\d.]*$/.test(String(v))) el.value = v; }
+    } catch (e) {}
   }
 
-  /* ---------- التشغيل ---------- */
+  async function fromWarehouse() {
+    const btn = $('#btnFromStore');
+    btn.classList.add('is-loading');
+    try {
+      await Store.ready();
+      const [s, b] = await Promise.all([Store.getSettings(), Store.getBalance()]);
+      $('#steelPriceTon').value = s.steelPriceTon; $('#steelPriceKg').value = R3(s.steelPriceTon / KG);
+      $('#cementPriceBag').value = s.cementBagPrice; $('#cementPriceTon').value = R3(s.cementBagPrice * BAGS);
+      $('#steelQtyTon').value = b.steelTon; $('#steelQtyKg').value = R3(b.steelTon * KG);
+      $('#cementQtyTon').value = b.cementTon; $('#cementQtyBag').value = R3(b.cementTon * BAGS);
+      ['#steelUsedTon', '#steelUsedKg', '#cementUsedTon', '#cementUsedBag'].forEach((s2) => { $(s2).value = 0; });
+      update();
+      App.toast('اتجابت الأسعار والرصيد من المخزن ✓', 'ok');
+    } catch (e) {
+      App.toast('مقدرتش أقرا بيانات المخزن', 'err');
+    }
+    btn.classList.remove('is-loading');
+  }
+
   function boot() {
-    link('#steelPriceTon', '#steelPriceKg', 1 / KG, updateBadges);
-    link('#cementPriceBag', '#cementPriceTon', BAGS, updateBadges);
-    link('#steelQtyTon', '#steelQtyKg', KG, updateBadges);
-    link('#cementQtyTon', '#cementQtyBag', BAGS, updateBadges);
+    load();
+    link('#steelPriceTon', '#steelPriceKg', 1 / KG);
+    link('#cementPriceBag', '#cementPriceTon', BAGS);
+    link('#steelQtyTon', '#steelQtyKg', KG);
+    link('#cementQtyTon', '#cementQtyBag', BAGS);
     link('#steelUsedTon', '#steelUsedKg', KG);
     link('#cementUsedTon', '#cementUsedBag', BAGS);
-
-    $('#btnCalc').addEventListener('click', calculate);
-    $('#btnFromStore').addEventListener('click', pullFromWarehouse);
-
-    // Enter في أي خانة = احسب
-    App.$$('input[type=number]').forEach(function (el) {
-      el.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); calculate(); }
-      });
+    $('#btnFromStore').addEventListener('click', fromWarehouse);
+    $('#btnReset').addEventListener('click', () => {
+      ['#steelUsedTon', '#steelUsedKg', '#cementUsedTon', '#cementUsedBag'].forEach((s) => { $(s).value = 0; });
+      update();
     });
-
-    updateBadges();
+    $$('input[type=number]').forEach((el) => el.addEventListener('focus', () => el.select()));
+    update();
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

@@ -1,258 +1,143 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0f1726">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b0f19">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="الحاسبة">
 <meta name="description" content="حاسبة تكلفة الحديد والأسمنت بسعر السوق">
 <title>الحاسبة — نظام مواد البناء</title>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300..700&display=swap">
 <link rel="stylesheet" href="assets/css/app.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<script src="assets/js/core.js"></script>
+<style>
+  .calc-top { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-5); }
+  .calc-top .brand { margin-inline-end: auto; }
+  .calc-layout { display: grid; gap: var(--sp-4); }
+  @media (min-width: 1000px) { .calc-layout { grid-template-columns: 1.25fr 1fr; align-items: start; } .calc-layout .sticky { position: sticky; top: var(--sp-5); } }
+  .mat-block + .mat-block { margin-top: var(--sp-5); padding-top: var(--sp-5); border-top: 1px dashed var(--line-2); }
+  .mat-head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+  .mat-head b { font-size: 1.05rem; }
+  .sub-title { font-size: .74rem; font-weight: 600; color: var(--faint); margin: var(--sp-4) 0 var(--sp-2); }
+  .res-row { display: flex; align-items: center; gap: var(--sp-4); }
+  .res-row .meta { flex: 1; min-width: 0; }
+  .total-card { text-align: center; background: linear-gradient(135deg, color-mix(in oklch, var(--in) 18%, var(--surface-solid)), var(--surface)); border-color: color-mix(in oklch, var(--in) 35%, transparent); }
+  .total-card .kpi-value { font-size: clamp(1.9rem, 9cqi, 2.7rem); color: var(--in); }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-top: var(--sp-3); font-size: .82rem; color: var(--muted); }
+</style>
 </head>
 <body>
+<script src="assets/js/icons.js"></script>
+<div class="bg-fx" aria-hidden="true"></div>
 
-<div class="container">
-
-  <div class="topbar">
-    <a href="index.html" class="back-btn">← الرئيسية</a>
-    <span class="spacer"></span>
-    <button class="btn btn-ghost btn-sm" id="btnFromStore" type="button" title="جيب الأسعار والرصيد من المخزن">
-      📦 جيب من المخزن</button>
+<main class="container">
+  <div class="calc-top">
+    <a href="index.html" class="brand">
+      <img class="brand-logo" src="assets/icon.svg" alt="" width="40" height="40">
+      <span class="brand-name"><b>الحاسبة</b><small>الإخلاص لمواد البناء</small></span>
+    </a>
+    <button class="btn btn-ghost btn-sm" id="btnFromStore" type="button"><svg class="i i-sm"><use href="#i-warehouse"/></svg>جيب من المخزن</button>
+    <button class="btn btn-ghost btn-icon theme-btn" data-theme-toggle type="button" aria-label="تبديل الوضع"><svg class="i i-moon"><use href="#i-moon"/></svg><svg class="i i-sun"><use href="#i-sun"/></svg></button>
   </div>
 
-  <header class="page-head">
-    <h1>🧮 حاسبة مواد البناء</h1>
-    <p>احسب تكلفة الحديد والأسمنت بسعر السوق</p>
+  <header class="page-head reveal">
+    <div><h1><span class="grad-text">حاسبة مواد البناء</span></h1><p>اكتب الأرقام والنتيجة بتتحسب لوحدها — كل خانتين مربوطين ببعض</p></div>
+    <button class="btn btn-ghost btn-sm" id="btnReset" type="button"><svg class="i i-sm"><use href="#i-refresh"/></svg>تصفير</button>
   </header>
 
-  <!-- ── الأسعار ── -->
-  <section class="card">
-    <div class="section-title">⚡ أسعار السوق — غيّر أي رقم والتاني بيتحسب لوحده</div>
-    <div class="grid-2">
-      <div class="field">
-        <label>🔩 الحديد</label>
-        <div class="grid-2" style="gap:var(--sp-2)">
-          <div class="field">
-            <span class="hint">سعر الطن</span>
-            <div class="input-wrap">
-              <input type="number" id="steelPriceTon" inputmode="decimal" value="38700" min="0" step="any">
-              <span class="unit">ج/طن</span>
-            </div>
-          </div>
-          <div class="field">
-            <span class="hint">سعر الكيلو</span>
-            <div class="input-wrap">
-              <input type="number" id="steelPriceKg" inputmode="decimal" value="38.7" min="0" step="any">
-              <span class="unit">ج/كجم</span>
-            </div>
-          </div>
+  <div class="calc-layout">
+    <div>
+      <section class="card reveal" style="--d:1">
+        <div class="card-head"><div class="card-title"><svg class="i"><use href="#i-tag"/></svg>أسعار السوق</div></div>
+        <div class="grid-2">
+          <div class="field"><label for="steelPriceTon">حديد — سعر الطن</label><div class="input-wrap"><input type="number" id="steelPriceTon" inputmode="decimal" value="38700" min="0" step="any"><span class="unit">ج/طن</span></div></div>
+          <div class="field"><label for="steelPriceKg">حديد — سعر الكيلو</label><div class="input-wrap"><input type="number" id="steelPriceKg" inputmode="decimal" value="38.7" min="0" step="any"><span class="unit">ج/كجم</span></div></div>
+          <div class="field"><label for="cementPriceBag">أسمنت — سعر الشكارة</label><div class="input-wrap"><input type="number" id="cementPriceBag" inputmode="decimal" value="220" min="0" step="any"><span class="unit">ج/شكارة</span></div></div>
+          <div class="field"><label for="cementPriceTon">أسمنت — سعر الطن</label><div class="input-wrap"><input type="number" id="cementPriceTon" inputmode="decimal" value="4400" min="0" step="any"><span class="unit">ج/طن</span></div></div>
         </div>
-        <div class="sync-note">↔ الطن = 1000 كيلو</div>
-      </div>
+      </section>
 
-      <div class="field">
-        <label>🏛️ الأسمنت</label>
-        <div class="grid-2" style="gap:var(--sp-2)">
-          <div class="field">
-            <span class="hint">سعر الشكارة</span>
-            <div class="input-wrap">
-              <input type="number" id="cementPriceBag" inputmode="decimal" value="220" min="0" step="any">
-              <span class="unit">ج/شكارة</span>
-            </div>
+      <section class="card reveal" style="--d:2">
+        <div class="mat-block">
+          <div class="mat-head"><span class="kpi-ic steel"><svg class="i"><use href="#i-steel"/></svg></span><b>الحديد</b></div>
+          <div class="sub-title">الكمية المتاحة</div>
+          <div class="grid-2">
+            <div class="input-wrap"><input type="number" id="steelQtyTon" inputmode="decimal" value="30" min="0" step="any" aria-label="حديد متاح بالطن"><span class="unit">طن</span></div>
+            <div class="input-wrap"><input type="number" id="steelQtyKg" inputmode="decimal" value="30000" min="0" step="any" aria-label="حديد متاح بالكيلو"><span class="unit">كجم</span></div>
           </div>
-          <div class="field">
-            <span class="hint">سعر الطن</span>
-            <div class="input-wrap">
-              <input type="number" id="cementPriceTon" inputmode="decimal" value="4400" min="0" step="any">
-              <span class="unit">ج/طن</span>
-            </div>
+          <div class="sub-title">تم صرفه</div>
+          <div class="grid-2">
+            <div class="input-wrap"><input type="number" id="steelUsedTon" inputmode="decimal" value="0" min="0" step="any" aria-label="حديد مصروف بالطن"><span class="unit">طن</span></div>
+            <div class="input-wrap"><input type="number" id="steelUsedKg" inputmode="decimal" value="0" min="0" step="any" aria-label="حديد مصروف بالكيلو"><span class="unit">كجم</span></div>
           </div>
         </div>
-        <div class="sync-note">↔ الطن = 20 شكارة</div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ── الكمية المتاحة ── -->
-  <div class="section-title">📦 الكمية المتاحة</div>
-  <div class="grid-2" style="margin-bottom:var(--sp-4)">
-    <div class="stat card-accent accent-steel">
-      <div class="stat-icon">🔩</div>
-      <div class="stat-label">كمية الحديد</div>
-      <div class="grid-2" style="gap:var(--sp-2);margin-bottom:var(--sp-3)">
-        <div class="field">
-          <span class="hint">بالطن</span>
-          <div class="input-wrap">
-            <input type="number" id="steelQtyTon" inputmode="decimal" value="30" min="0" step="any">
-            <span class="unit">طن</span>
+        <div class="mat-block">
+          <div class="mat-head"><span class="kpi-ic cement"><svg class="i"><use href="#i-bag"/></svg></span><b>الأسمنت</b></div>
+          <div class="sub-title">الكمية المتاحة</div>
+          <div class="grid-2">
+            <div class="input-wrap"><input type="number" id="cementQtyTon" inputmode="decimal" value="50" min="0" step="any" aria-label="أسمنت متاح بالطن"><span class="unit">طن</span></div>
+            <div class="input-wrap"><input type="number" id="cementQtyBag" inputmode="decimal" value="1000" min="0" step="any" aria-label="أسمنت متاح بالشكارة"><span class="unit">شكارة</span></div>
+          </div>
+          <div class="sub-title">تم صرفه</div>
+          <div class="grid-2">
+            <div class="input-wrap"><input type="number" id="cementUsedTon" inputmode="decimal" value="0" min="0" step="any" aria-label="أسمنت مصروف بالطن"><span class="unit">طن</span></div>
+            <div class="input-wrap"><input type="number" id="cementUsedBag" inputmode="decimal" value="0" min="0" step="any" aria-label="أسمنت مصروف بالشكارة"><span class="unit">شكارة</span></div>
           </div>
         </div>
-        <div class="field">
-          <span class="hint">بالكيلو</span>
-          <div class="input-wrap">
-            <input type="number" id="steelQtyKg" inputmode="decimal" value="30000" min="0" step="any">
-            <span class="unit">كجم</span>
-          </div>
-        </div>
-      </div>
-      <div class="stat-extra">≈ <strong class="num" id="steelStockVal">0</strong> جنيه</div>
+      </section>
     </div>
 
-    <div class="stat card-accent accent-cement">
-      <div class="stat-icon">🏛️</div>
-      <div class="stat-label">كمية الأسمنت</div>
-      <div class="grid-2" style="gap:var(--sp-2);margin-bottom:var(--sp-3)">
-        <div class="field">
-          <span class="hint">بالطن</span>
-          <div class="input-wrap">
-            <input type="number" id="cementQtyTon" inputmode="decimal" value="50" min="0" step="any">
-            <span class="unit">طن</span>
-          </div>
-        </div>
-        <div class="field">
-          <span class="hint">بالشكاير</span>
-          <div class="input-wrap">
-            <input type="number" id="cementQtyBag" inputmode="decimal" value="1000" min="0" step="any">
-            <span class="unit">شكارة</span>
-          </div>
-        </div>
-      </div>
-      <div class="stat-extra">≈ <strong class="num" id="cementStockVal">0</strong> جنيه</div>
-    </div>
-  </div>
+    <div class="sticky">
+      <div id="warnHost"></div>
 
-  <!-- ── المصروف ── -->
-  <section class="card">
-    <div class="section-title">🔧 الكميات المستخدمة / المصروفة</div>
-    <div class="grid-2">
-      <div class="field">
-        <label>🔩 حديد تم صرفه</label>
-        <div class="grid-2" style="gap:var(--sp-2)">
-          <div class="field">
-            <span class="hint">بالطن</span>
-            <div class="input-wrap">
-              <input type="number" id="steelUsedTon" inputmode="decimal" value="0" min="0" step="any">
-              <span class="unit">طن</span>
-            </div>
+      <div class="card total-card reveal" style="--d:3">
+        <div class="kpi-label">إجمالي قيمة المتبقي</div>
+        <div class="kpi-value"><span class="num" id="rTotal">0</span><small>جنيه</small></div>
+        <div class="split"><span>حديد: <b class="num" id="rSteelVal">0</b></span><span>أسمنت: <b class="num" id="rCementVal">0</b></span></div>
+      </div>
+
+      <div class="card reveal" style="--d:4">
+        <div class="res-row">
+          <div class="meta">
+            <div class="kpi-label">حديد متبقي</div>
+            <div class="kpi-value t-steel"><span class="num" id="rSteelTon">0</span><small>طن</small></div>
+            <div class="kpi-sub"><span class="num" id="rSteelKg">0</span> كجم · من أصل <span class="num" id="rSteelFrom">0</span> طن</div>
           </div>
-          <div class="field">
-            <span class="hint">بالكيلو</span>
-            <div class="input-wrap">
-              <input type="number" id="steelUsedKg" inputmode="decimal" value="0" min="0" step="any">
-              <span class="unit">كجم</span>
-            </div>
-          </div>
+          <div class="ring-wrap"><div class="ring" id="ringSteel" style="--c:var(--steel)"></div><span class="ring-label num" id="pSteel">0%</span></div>
         </div>
       </div>
-      <div class="field">
-        <label>🏛️ أسمنت تم صرفه</label>
-        <div class="grid-2" style="gap:var(--sp-2)">
-          <div class="field">
-            <span class="hint">بالطن</span>
-            <div class="input-wrap">
-              <input type="number" id="cementUsedTon" inputmode="decimal" value="0" min="0" step="any">
-              <span class="unit">طن</span>
-            </div>
+
+      <div class="card reveal" style="--d:5">
+        <div class="res-row">
+          <div class="meta">
+            <div class="kpi-label">أسمنت متبقي</div>
+            <div class="kpi-value t-cement"><span class="num" id="rCementTon">0</span><small>طن</small></div>
+            <div class="kpi-sub"><span class="num" id="rCementBags">0</span> شكارة · من أصل <span class="num" id="rCementFrom">0</span> طن</div>
           </div>
-          <div class="field">
-            <span class="hint">بالشكاير</span>
-            <div class="input-wrap">
-              <input type="number" id="cementUsedBag" inputmode="decimal" value="0" min="0" step="any">
-              <span class="unit">شكارة</span>
-            </div>
-          </div>
+          <div class="ring-wrap"><div class="ring" id="ringCement" style="--c:var(--cement)"></div><span class="ring-label num" id="pCement">0%</span></div>
         </div>
       </div>
-    </div>
-  </section>
 
-  <button class="btn btn-primary btn-lg btn-block" id="btnCalc" type="button"
-          style="margin-bottom:var(--sp-5)">⚡ احسب المتبقي والتكلفة</button>
-
-  <!-- ── النتائج ── -->
-  <div id="results" hidden>
-    <div id="warnHost"></div>
-
-    <div class="section-title">📊 المتبقي في المخزن</div>
-    <div class="grid-2" style="margin-bottom:var(--sp-4)">
-      <div class="stat card-accent accent-steel">
-        <div class="stat-label">🔩 حديد متبقي</div>
-        <div class="stat-value text-steel num" id="rSteelTon">—</div>
-        <div class="stat-sub" id="rSteelKg"></div>
-        <div class="stat-sub" id="rSteelFrom"></div>
-      </div>
-      <div class="stat card-accent accent-cement">
-        <div class="stat-label">🏛️ أسمنت متبقي</div>
-        <div class="stat-value text-cement num" id="rCementTon">—</div>
-        <div class="stat-sub" id="rCementBags"></div>
-        <div class="stat-sub" id="rCementFrom"></div>
-      </div>
-    </div>
-
-    <section class="card">
-      <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:var(--sp-2)">
-        <span>نسبة الحديد المتبقي</span><strong class="text-steel num" id="pSteelPct">0%</strong>
-      </div>
-      <div class="bar bar-steel" style="margin:0 0 var(--sp-4)"><span id="pSteelBar" style="width:0%"></span></div>
-      <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:var(--sp-2)">
-        <span>نسبة الأسمنت المتبقي</span><strong class="text-cement num" id="pCementPct">0%</strong>
-      </div>
-      <div class="bar bar-cement" style="margin:0"><span id="pCementBar" style="width:0%"></span></div>
-    </section>
-
-    <div class="section-title">💰 قيمة المتبقي</div>
-    <div class="grid-2" style="margin-bottom:var(--sp-4)">
-      <div class="stat">
-        <div class="stat-label">قيمة الحديد المتبقي</div>
-        <div class="stat-value text-steel num" id="rSteelVal">—</div>
-        <div class="stat-sub" id="rSteelNote"></div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">قيمة الأسمنت المتبقي</div>
-        <div class="stat-value text-cement num" id="rCementVal">—</div>
-        <div class="stat-sub" id="rCementNote"></div>
-      </div>
-    </div>
-
-    <div class="section-title">🏆 الإجمالي</div>
-    <div class="card" style="background:linear-gradient(135deg,#152a19,#1c3a22);border-color:var(--green-line);text-align:center">
-      <div class="stat-label text-green">إجمالي قيمة ما تبقى في المخزن</div>
-      <div class="stat-value text-green num" id="rTotal">—</div>
-      <div class="stat-sub text-green" id="rTotalSub"></div>
-    </div>
-
-    <div class="section-title">📉 تكلفة ما تم صرفه</div>
-    <div class="grid-2" style="margin-bottom:var(--sp-6)">
-      <div class="stat card-accent accent-red">
-        <div class="stat-label">تكلفة الحديد المصروف</div>
-        <div class="stat-value text-red num" id="rSteelUsed">—</div>
-        <div class="stat-sub" id="rSteelUsedNote"></div>
-      </div>
-      <div class="stat card-accent accent-red">
-        <div class="stat-label">تكلفة الأسمنت المصروف</div>
-        <div class="stat-value text-red num" id="rCementUsed">—</div>
-        <div class="stat-sub" id="rCementUsedNote"></div>
-      </div>
-      <div class="stat span-all" style="text-align:center">
-        <div class="stat-label">إجمالي المصروف</div>
-        <div class="stat-value num" style="color:#f97316" id="rTotalUsed">—</div>
-        <div class="stat-sub">جنيه إجمالي</div>
+      <div class="card reveal" style="--d:6">
+        <div class="card-head" style="margin-bottom:var(--sp-3)"><div class="card-title"><svg class="i t-out"><use href="#i-up"/></svg>تكلفة اللي اتصرف</div></div>
+        <div class="kpi-value t-out"><span class="num" id="rTotalUsed">0</span><small>جنيه</small></div>
+        <div class="split"><span>حديد: <b class="num" id="rSteelUsed">0</b></span><span>أسمنت: <b class="num" id="rCementUsed">0</b></span></div>
       </div>
     </div>
   </div>
+</main>
 
-</div>
-
-<script src="assets/js/core.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/calculator.js"></script>
 </body>

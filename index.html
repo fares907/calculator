@@ -1,88 +1,95 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0f1726">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b0f19">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="مواد البناء">
 <meta name="description" content="نظام مواد البناء — حاسبة الأسعار ومخزن الحديد والأسمنت">
-<title>نظام مواد البناء</title>
-
+<title>الإخلاص — المخزن والحاسبة</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300..700&display=swap">
 <link rel="stylesheet" href="assets/css/app.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="assets/icon.svg">
-
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<script src="assets/js/core.js"></script>
 <style>
-  /* الصفحة دي بس: توسيط رأسي مع احترام ارتفاع شاشة الموبايل */
-  .home{
-    /* بنطرح حشوة الـ body (فوق + تحت) عشان الصفحة تدخل بالظبط من غير تمرير */
-    min-height:calc(100dvh - var(--sp-3) - var(--sp-6) - var(--safe-t) - var(--safe-b));
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    text-align:center;gap:var(--sp-4);
+  .home { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; gap: var(--sp-7); padding-block: var(--sp-7); }
+  .home-top { display: flex; justify-content: space-between; align-items: center; }
+  .hero-t { text-align: center; }
+  .hero-t .logo { width: 96px; height: 96px; margin: 0 auto var(--sp-5); filter: drop-shadow(0 22px 40px rgba(232,129,31,.45)); animation: float 6s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-8px) rotate(-3deg); } }
+  .hero-t h1 { font-size: clamp(2rem, 8vw, 3.4rem); font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
+  .hero-t p { color: var(--muted); margin-top: var(--sp-3); font-size: clamp(.95rem, 2.4vw, 1.1rem); }
+  .nav-grid { display: grid; gap: var(--sp-4); width: 100%; max-width: 860px; margin-inline: auto; }
+  @media (min-width: 680px) { .nav-grid { grid-template-columns: 1fr 1fr; } }
+  .nav-card {
+    display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-6); min-height: 230px;
+    transition: transform .45s var(--ease), border-color .3s, box-shadow .45s var(--ease); overflow: hidden;
   }
-  .home .logo{font-size:clamp(2.4rem,11vw,3.4rem);line-height:1;}
-  .home .sub{color:var(--muted);font-size:.9rem;margin-bottom:var(--sp-5);}
-
-  .nav-grid{display:grid;grid-template-columns:1fr;gap:var(--sp-4);width:100%;max-width:640px;}
-  @media(min-width:600px){.nav-grid{grid-template-columns:1fr 1fr;}}
-
-  .nav-card{
-    display:flex;flex-direction:column;align-items:center;gap:var(--sp-3);
-    background:var(--card);border:1px solid var(--line);
-    border-radius:var(--r-lg);padding:var(--sp-6) var(--sp-5);
-    position:relative;overflow:hidden;
-    transition:transform .2s,border-color .2s,box-shadow .2s;
-    -webkit-tap-highlight-color:transparent;
-  }
-  .nav-card::after{content:'';position:absolute;inset-inline:0;bottom:0;height:3px;}
-  .nav-card.calc::after{background:linear-gradient(90deg,var(--steel-dark),var(--steel));}
-  .nav-card.store::after{background:linear-gradient(90deg,var(--cement-dark),var(--cement-light));}
-  .nav-card:active{transform:scale(.985);}
-  @media(hover:hover){
-    .nav-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-3);}
-    .nav-card.calc:hover{border-color:var(--steel-dark);}
-    .nav-card.store:hover{border-color:var(--cement);}
-  }
-  .nc-icon{font-size:2.6rem;line-height:1;}
-  .nc-title{font-size:1.2rem;font-weight:900;}
-  .nc-desc{font-size:.82rem;color:var(--muted);line-height:1.7;}
-  .home .footer{color:var(--muted-2);font-size:.75rem;margin-top:var(--sp-6);}
+  .nav-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); border-color: var(--line-2); }
+  .nav-card .kpi-ic { width: 56px; height: 56px; border-radius: 18px; transition: transform .5s var(--spring); }
+  .nav-card .kpi-ic .i { width: 28px; height: 28px; }
+  .nav-card:hover .kpi-ic { transform: scale(1.08) rotate(-8deg); }
+  .nav-card h2 { font-size: 1.35rem; font-weight: 700; }
+  .nav-card p { color: var(--muted); font-size: .9rem; line-height: 1.75; flex: 1; }
+  .nav-card .go { display: inline-flex; align-items: center; gap: var(--sp-2); font-weight: 600; color: var(--brand); }
+  .nav-card .go .i { transform: scaleX(-1); transition: transform .35s var(--spring); }
+  .nav-card:hover .go .i { transform: scaleX(-1) translateX(6px); }
+  .nav-card .kpi-glow { width: 220px; height: 220px; opacity: .22; transition: opacity .4s; }
+  .nav-card:hover .kpi-glow { opacity: .4; }
+  .feat { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); }
+  .home-foot { text-align: center; color: var(--faint); font-size: .78rem; }
 </style>
 </head>
 <body>
+<script src="assets/js/icons.js"></script>
+<div class="bg-fx" aria-hidden="true"></div>
 
 <main class="container home">
-  <div class="logo">🏗️</div>
-  <div class="page-head" style="padding:0">
-    <h1>نظام مواد البناء</h1>
+  <div class="home-top">
+    <span class="badge b-soft"><span class="sync-pill on" style="border:0;background:none;padding:0;min-height:0"><span class="dot"></span></span>يشتغل من غير نت</span>
+    <button class="btn btn-ghost btn-icon theme-btn" data-theme-toggle type="button" aria-label="تبديل الوضع"><svg class="i i-moon"><use href="#i-moon"/></svg><svg class="i i-sun"><use href="#i-sun"/></svg></button>
   </div>
-  <p class="sub">حاسبة الأسعار · مخزن الحديد والأسمنت</p>
+
+  <header class="hero-t reveal">
+    <img class="logo" src="assets/icon.svg" alt="شعار الإخلاص" width="96" height="96">
+    <h1><span class="grad-text">الإخلاص</span></h1>
+    <p>نظام المخزن والحاسبة — حديد · أسمنت · حسابات · تقارير</p>
+  </header>
 
   <nav class="nav-grid">
-    <a href="calculator.html" class="nav-card calc">
-      <span class="nc-icon">🧮</span>
-      <span class="nc-title">الحاسبة</span>
-      <span class="nc-desc">احسب تكلفة الحديد والأسمنت بسعر السوق — بالطن والكيلو والشكارة</span>
-      <span class="btn btn-primary" style="background:linear-gradient(135deg,var(--steel-dark),var(--steel));color:#fff">
-        افتح الحاسبة ←</span>
+    <a href="warehouse.html" class="card nav-card reveal" style="--d:1">
+      <div class="kpi-glow" style="background:var(--brand)"></div>
+      <span class="kpi-ic"><svg class="i"><use href="#i-warehouse"/></svg></span>
+      <h2>المخزن</h2>
+      <p>صرف واستلام بالأصناف والمقاسات، رصيد لحظي، تنبيهات النقص، دفتر العملاء والموردين، تقارير PDF ومزامنة بين الأجهزة.</p>
+      <span class="go">افتح المخزن <svg class="i"><use href="#i-back"/></svg></span>
     </a>
-
-    <a href="warehouse.html" class="nav-card store">
-      <span class="nc-icon">📦</span>
-      <span class="nc-title">المخزن</span>
-      <span class="nc-desc">صرف واستلام بضاعة — تتبع الرصيد وسجل كل الحركات مع بحث وتصدير</span>
-      <span class="btn btn-primary">افتح المخزن ←</span>
+    <a href="calculator.html" class="card nav-card reveal" style="--d:2">
+      <div class="kpi-glow" style="background:var(--steel)"></div>
+      <span class="kpi-ic steel"><svg class="i"><use href="#i-calc"/></svg></span>
+      <h2>الحاسبة</h2>
+      <p>احسب تكلفة الحديد والأسمنت بسعر السوق — بالطن والكيلو والشكارة — والنتيجة بتتحسب وانت بتكتب.</p>
+      <span class="go">افتح الحاسبة <svg class="i"><use href="#i-back"/></svg></span>
     </a>
   </nav>
 
-  <p class="footer">حديد · أسمنت · مواد بناء</p>
-</main>
+  <div class="feat reveal" style="--d:3">
+    <span class="badge b-soft"><svg class="i"><use href="#i-shield"/></svg>بياناتك على جهازك</span>
+    <span class="badge b-soft"><svg class="i"><use href="#i-zap"/></svg>سريع مع 100,000 حركة</span>
+    <span class="badge b-soft"><svg class="i"><use href="#i-cloud"/></svg>مزامنة مؤمّنة</span>
+    <span class="badge b-soft"><svg class="i"><use href="#i-printer"/></svg>تقارير PDF</span>
+  </div>
 
+  <p class="home-foot">حديد · أسمنت · مواد بناء</p>
+</main>
 </body>
 </html>
