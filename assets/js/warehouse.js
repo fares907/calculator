@@ -46,6 +46,20 @@
     seg.style.setProperty('--i', btns.indexOf(btn));
   }
   function errMsg(e) { return (e && e.message) || ''; }
+  /* ---------- كاش الحسابات التقيلة ----------
+     التحليلات وأرصدة الجهات بتتحسب مرة واحدة، وبتتعاد بس لما البيانات تتغير فعلاً */
+  let dataVer = 0;
+  const memo = {};
+  function cached(key, fn) {
+    const m = memo[key];
+    if (m && m.ver === dataVer) return m.p;
+    const p = fn();
+    memo[key] = { ver: dataVer, p };
+    p.catch(() => { delete memo[key]; });
+    return p;
+  }
+  function bump() { dataVer++; state.accounts = null; }
+  const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 1200 }) : setTimeout(fn, 200));
   const USER_KEY = 'binaa_user';
   function userName() { try { return localStorage.getItem(USER_KEY) || ''; } catch (e) { return ''; } }
   const absUrl = (p) => new URL(p, location.href).href;
@@ -137,7 +151,7 @@
       Report.wireTooltip(host);
       $('#dashLegend').innerHTML = Report.legendHtml();
       renderRecent(recent.rows);
-      renderInsights();
+      idle(renderInsights);
       App.countTo($('#k30'), last30.totals.count);
       $('#spark30').innerHTML = Report.sparkline(last30.buckets.map((b) => b.count), getComputedStyle(document.documentElement).getPropertyValue('--in').trim());
     } catch (e) {
@@ -184,7 +198,7 @@
     if (view === 'dash') { renderBalance(); loadDash(); }
     else if (view === 'move') { renderPreview(); setTimeout(() => { if (matchMedia('(pointer:fine)').matches) $('#qtyTon').focus(); }, 350); }
     else if (view === 'log') loadLog();
-    else if (view === 'items') { renderItems(); Store.itemInsights().then((x) => { state.insights = x; renderItems(); }); }
+    else if (view === 'items') { renderItems(); cached('insights', () => Store.itemInsights()).then((x) => { state.insights = x; renderItems(); }); }
     else if (view === 'reports') loadReports();
   }
 
@@ -320,7 +334,7 @@
 
   function applyResult(res) {
     if (!res) return;
-    state.accounts = null;
+    bump();
     state.balance = res.balance;
     state.itemBal = res.itemBal;
     state.parties = null;
@@ -625,7 +639,6 @@
     } catch (e) {
       host.innerHTML = `<div class="alert alert-error">${icon('alert')}<div>مشكلة في الرسم: ${esc(errMsg(e))}</div></div>`;
     }
-    state.accounts = null;
     renderAccounts();
     renderProfit();
   }
@@ -1004,7 +1017,7 @@
   }
 
   async function loadAccounts() {
-    if (!state.accounts) state.accounts = await Store.partyAccounts();
+    state.accounts = await cached('accounts', () => Store.partyAccounts());
     return state.accounts;
   }
 
@@ -1139,7 +1152,7 @@
     });
   }
   function afterPayChange() {
-    state.accounts = null;
+    bump();
     pushSoon();
     if (state.view === 'reports') renderAccounts();
     if (state.view === 'dash') renderInsights();
@@ -1205,7 +1218,7 @@
      ====================================================================== */
   const BACKUP_KEY = 'binaa_last_backup';
   async function renderInsights() {
-    const [ins, accs, n] = await Promise.all([Store.itemInsights(), loadAccounts(), Store.count()]);
+    const [ins, accs, n] = await Promise.all([cached('insights', () => Store.itemInsights()), loadAccounts(), Store.count()]);
     state.insights = ins;
     const cards = [];
     /* أصناف هتخلص قريب */
@@ -1240,7 +1253,7 @@
   }
 
   async function renderProfit() {
-    const ins = await Store.itemInsights();
+    const ins = await cached('insights', () => Store.itemInsights());
     state.insights = ins;
     let profit = 0, any = false;
     for (const v of Object.values(ins)) if (v.profit !== null) { profit += v.profit; any = true; }
@@ -1338,7 +1351,7 @@
      ====================================================================== */
   async function refreshAll() {
     [state.balance, state.itemBal, state.items] = await Promise.all([Store.getBalance(), Store.getItemBalances(), Store.getItems()]);
-    state.parties = null; state.accounts = null;
+    state.parties = null; bump();
     state.settings = await Store.getSettings(); fillPrices();
     fillItemSelect($('#itemSelect'), state.mat, $('#itemSelect').value); fillFilterItems();
     renderBalance(); renderPreview(); refreshPartyList(); updateCount();

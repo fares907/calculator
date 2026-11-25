@@ -28,7 +28,7 @@
     /* الأسطح — غامق */
     --bg: oklch(0.15 0.02 260);
     --bg-2: oklch(0.18 0.025 260);
-    --surface: oklch(0.21 0.025 262 / .72);
+    --surface: oklch(0.205 0.025 262 / .94);
     --surface-solid: oklch(0.21 0.025 262);
     --surface-2: oklch(0.25 0.028 262 / .8);
     --surface-3: oklch(0.29 0.03 262);
@@ -69,7 +69,7 @@
 
     --bg: oklch(0.975 0.005 260);
     --bg-2: oklch(0.955 0.008 260);
-    --surface: oklch(1 0 0 / .78);
+    --surface: oklch(1 0 0 / .95);
     --surface-solid: oklch(1 0 0);
     --surface-2: oklch(0.965 0.006 260 / .9);
     --surface-3: oklch(0.93 0.01 260);
@@ -123,15 +123,15 @@
 
   /* خلفية حية: إضاءة ناعمة بتتحرك ببطء + شبكة هندسية خفيفة */
   .bg-fx { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  /* الخلفية ثابتة (من غير تمويه ولا حركة مستمرة) — كانت أكبر سبب لتقل الموبايل:
+     بتتحسب مرة واحدة بس، وبعدين المتصفح بيعيد استخدامها من غير ما يرسمها تاني */
+  .bg-fx { contain: strict; transform: translateZ(0); }
   .bg-fx::before {
-    content: ''; position: absolute; inset: -20%;
+    content: ''; position: absolute; inset: 0;
     background:
-      radial-gradient(40% 35% at 15% 10%, color-mix(in oklch, var(--brand) 22%, transparent), transparent 70%),
-      radial-gradient(35% 30% at 90% 20%, color-mix(in oklch, var(--steel) 20%, transparent), transparent 70%),
-      radial-gradient(45% 40% at 60% 100%, color-mix(in oklch, var(--brand-2) 14%, transparent), transparent 70%);
-    filter: blur(20px);
-    animation: aurora 26s ease-in-out infinite alternate;
-    opacity: .9;
+      radial-gradient(55% 45% at 12% 0%, color-mix(in oklch, var(--brand) 16%, transparent), transparent 72%),
+      radial-gradient(45% 40% at 95% 12%, color-mix(in oklch, var(--steel) 15%, transparent), transparent 72%),
+      radial-gradient(55% 45% at 60% 105%, color-mix(in oklch, var(--brand-2) 10%, transparent), transparent 72%);
   }
   :root[data-theme="light"] .bg-fx::before { opacity: .55; }
   .bg-fx::after {
@@ -141,11 +141,6 @@
       linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
     background-size: 44px 44px;
     mask-image: radial-gradient(80% 60% at 50% 0%, #000 30%, transparent 80%);
-  }
-  @keyframes aurora {
-    0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-    50% { transform: translate3d(3%, 2%, 0) rotate(6deg) scale(1.05); }
-    100% { transform: translate3d(-3%, -1%, 0) rotate(-4deg) scale(1.02); }
   }
 
   /* انتقال الثيم: دايرة بتكبر من مكان الضغطة */
@@ -176,9 +171,7 @@
     display: flex; align-items: center; gap: var(--sp-2);
     padding: calc(var(--sp-2) + var(--safe-t)) var(--sp-4) var(--sp-2);
     margin: calc(-1 * (var(--sp-4) + var(--safe-t))) calc(-1 * var(--sp-4)) var(--sp-4);
-    background: color-mix(in oklch, var(--bg) 78%, transparent);
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    background: color-mix(in oklch, var(--bg) 94%, transparent);
     border-bottom: 1px solid var(--line);
   }
   .mtop .brand { margin-inline-end: auto; }
@@ -187,9 +180,7 @@
     position: fixed; inset-inline: 0; bottom: 0; z-index: 60;
     display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
     height: calc(var(--tabbar-h) + var(--safe-b)); padding-bottom: var(--safe-b);
-    background: color-mix(in oklch, var(--surface-solid) 82%, transparent);
-    backdrop-filter: blur(20px) saturate(170%);
-    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    background: color-mix(in oklch, var(--surface-solid) 96%, transparent);
     border-top: 1px solid var(--line);
   }
   .tab-btn {
@@ -221,8 +212,7 @@
     .sidebar {
       position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: var(--sp-2);
       padding: var(--sp-5) var(--sp-4);
-      background: color-mix(in oklch, var(--surface-solid) 55%, transparent);
-      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      background: color-mix(in oklch, var(--surface-solid) 70%, var(--bg));
       border-inline-end: 1px solid var(--line);
     }
     .sidebar .brand { padding: var(--sp-2) var(--sp-2) var(--sp-5); }
@@ -281,7 +271,6 @@
   .card {
     position: relative; background: var(--surface); border: 1px solid var(--line);
     border-radius: var(--r-lg); padding: var(--sp-5); box-shadow: var(--shadow);
-    backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
     container-type: inline-size;
   }
   .card::before {
@@ -523,7 +512,7 @@
     pointer-events: auto; max-width: min(480px, 100%); display: flex; align-items: center; gap: var(--sp-3);
     padding: 10px 12px 10px var(--sp-4); border-radius: var(--r-md); font-size: .88rem; font-weight: 500;
     background: color-mix(in oklch, var(--surface-solid) 92%, transparent); border: 1px solid var(--line-2); color: var(--text);
-    box-shadow: var(--shadow-lg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-lg);
     transform: translateY(16px) scale(.96); opacity: 0; transition: transform .4s var(--spring), opacity .25s;
   }
   .toast.show { transform: none; opacity: 1; }
@@ -543,7 +532,7 @@
   }
   dialog.sheet:not([open]) { opacity: 0; transform: translateY(40px); }
   @starting-style { dialog.sheet[open] { opacity: 0; transform: translateY(40px); } }
-  dialog.sheet::backdrop { background: oklch(0.1 0.02 260 / .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .3s, overlay .3s allow-discrete, display .3s allow-discrete; }
+  dialog.sheet::backdrop { background: oklch(0.1 0.02 260 / .62); transition: background .3s, overlay .3s allow-discrete, display .3s allow-discrete; }
   @starting-style { dialog.sheet[open]::backdrop { background: transparent; } }
   .sheet-body { padding: var(--sp-5) var(--sp-5) calc(var(--sp-5) + var(--safe-b)); overflow-y: auto; max-height: min(90dvh, 900px); }
   .sheet-grip { width: 42px; height: 5px; border-radius: 99px; background: var(--line-2); margin: -6px auto var(--sp-4); }
@@ -574,7 +563,7 @@
   .sync-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); position: relative; }
   .sync-pill.on { color: var(--in); border-color: color-mix(in oklch, var(--in) 40%, transparent); }
   .sync-pill.on .dot { background: var(--in); }
-  .sync-pill.on .dot::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--in); animation: ping 1.8s var(--ease) infinite; }
+  .sync-pill.on .dot::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--in); animation: ping 1.8s var(--ease) 3; }
   .sync-pill.busy { color: var(--warn); }
   .sync-pill.busy .dot { background: var(--warn); animation: blink .8s infinite; }
   .sync-pill.err { color: var(--out); border-color: color-mix(in oklch, var(--out) 40%, transparent); }
