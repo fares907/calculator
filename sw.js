@@ -4,12 +4,12 @@
    الملفات الثابتة: النسخة المحفوظة الأول وبنحدّثها في الخلفية
    طلبات المزامنة (Supabase) مبتتحفظش أبداً.
    ========================================================================== */
-const VERSION = 'binaa-v3.3.0';
+const VERSION = 'binaa-v3.4.0';
 const CORE = [
   './', 'index.html', 'calculator.html', 'warehouse.html', 'manifest.webmanifest',
-  'assets/css/app.css?v=3.3.0', 'assets/icon.svg', 'assets/icon-maskable.svg', 'assets/icon-192.png', 'assets/apple-touch-icon.png',
-  'assets/js/core.js?v=3.3.0', 'assets/js/icons.js?v=3.3.0', 'assets/js/store.js?v=3.3.0', 'assets/js/sync.js?v=3.3.0',
-  'assets/js/report.js?v=3.3.0', 'assets/vendor/qrcode-2.0.4.js?v=3.3.0', 'assets/js/warehouse.js?v=3.3.0', 'assets/js/calculator.js?v=3.3.0'
+  'assets/css/app.css?v=3.4.0', 'assets/icon.svg', 'assets/icon-maskable.svg', 'assets/icon-192.png', 'assets/apple-touch-icon.png',
+  'assets/js/core.js?v=3.4.0', 'assets/js/icons.js?v=3.4.0', 'assets/js/store.js?v=3.4.0', 'assets/js/sync.js?v=3.4.0',
+  'assets/js/report.js?v=3.4.0', 'assets/vendor/qrcode-2.0.4.js?v=3.4.0', 'assets/js/warehouse.js?v=3.4.0', 'assets/js/calculator.js?v=3.4.0'
 ];
 
 self.addEventListener('install', (e) => {
