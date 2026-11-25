@@ -79,6 +79,15 @@
     return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
   }
 
+  /* جهاز ضعيف؟ (معالج 4 أنوية أو أقل، أو رامات 3 جيجا أو أقل، أو وضع توفير البيانات)
+     → بنخفف الحركات المستمرة والتمويه أوتوماتيك */
+  try {
+    const nav = global.navigator || {};
+    const weak = (nav.hardwareConcurrency && nav.hardwareConcurrency <= 4) || (nav.deviceMemory && nav.deviceMemory <= 3) ||
+                 (nav.connection && nav.connection.saveData);
+    if (weak) document.documentElement.classList.add('lite');
+  } catch (e) {}
+
   const reduceMotion = () => global.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ---------- انتقال ناعم بين حالات الصفحة (View Transitions API) ---------- */
